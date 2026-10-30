@@ -12,9 +12,10 @@
 
 | 项 | 值 |
 |---|---|
-| 当前版本 | v1.0（单文件，6700 行） |
-| 单文件体积 | 260 KB |
-| 运行时依赖 | 1 个（MapLibre GL JS，CDN） |
+| 当前版本 | v1.1（Vite + TypeScript 工程） |
+| 应用代码 | 约 5000 行（入口 TS + 业务模块） |
+| 运行时依赖 | 1 个（MapLibre GL JS 5.24，npm） |
+| 构建产物 | gzip 约 348 KB（MapLibre 占 285 KB，独立拆包） |
 | 数据成本 | 0（全部使用免费开源数据源） |
 
 ---
@@ -83,14 +84,20 @@
 
 ## 快速开始
 
-不需要构建，不需要安装依赖：
+```bash
+npm install
+npm run dev          # http://127.0.0.1:5173
+```
+
+生产构建：
 
 ```bash
-# 方式一：直接双击打开（推荐 Chrome / Edge）
-# 方式二：起一个本地静态服务（避免 CORS 限制）
-python -m http.server 8096
-# 浏览器打开 http://127.0.0.1:8096/行程规划-开源地图版.html
+npm run build        # 类型检查 + 打包到 dist/
+npm run preview      # 预览构建产物
 ```
+
+> 如果只想看看效果，`archive/v1-single-file.html` 是工程化之前的单文件版本，
+> 双击即可运行，不需要 Node 环境。
 
 首次使用需要配置大模型 API Key：
 
@@ -106,14 +113,36 @@ python -m http.server 8096
 
 ```
 .
-├── 行程规划-开源地图版.html     主应用（v1 单文件）
-├── 行程规划.html                早期版本（腾讯地图 + GCJ-02），保留作演进记录
-├── 行程规划-开源地图调研与落地方案.md   开源地图方案论证
-├── 行程规划-调研与落地方案.md          初版技术选型
-└── README.md
+├── index.html              入口 HTML（仅结构，无内联样式与脚本）
+├── src/
+│   ├── main.ts             装配入口：挂载 MapLibre 全局、引入样式、加载 legacy
+│   ├── styles/
+│   │   └── app.css         设计系统与全部组件样式
+│   └── legacy/
+│       └── app.js          v1 业务实现（约 5000 行，随迭代逐步迁出）
+├── docs/
+│   ├── 开源地图调研与落地方案.md    为什么放弃商业地图、WGS-84 坐标系论证
+│   └── 初版技术选型.md             第一版方案对比
+├── archive/
+│   ├── v1-single-file.html  工程化前的单文件版本，可独立运行
+│   └── v0-tmap.html         最早的原型（腾讯地图 + GCJ-02），保留作演进记录
+├── vite.config.ts
+├── tsconfig.json
+└── package.json
 ```
 
-> 后续迭代将迁移到 `src/` + Vite + TypeScript 工程结构，旧代码以模块方式保留。
+**关于 `legacy/`**：v1 的全部逻辑仍集中在这一个文件里。直接重构成组件树风险太高，
+所以采取「新代码用 TS 写在 `src/` 下，旧代码原样保留在 `legacy/` 并逐步迁出」的策略——
+每一次提交只搬一个模块，保证随时可运行。
+
+后续模块划分：
+
+```
+src/ai/    大模型客户端、工具层（Function Calling）、Agent 循环、JSON 校验
+src/map/   地图初始化、路线渲染、图钉、卫星层、世界模型
+src/data/  地理编码、行程模型、持久化
+src/ui/    列表渲染、弹窗、主题、导出
+```
 
 ---
 
