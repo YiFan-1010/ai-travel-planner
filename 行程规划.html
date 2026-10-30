@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>旅游行程规划 · Stripe 风格</title>
+<style>
+  :root{
+    --primary:#635bff;
+    --primary-soft:#efeefe;
+    --ink:#0a2540;
+    --ink-2:#425466;
+    --ink-3:#697386;
+    --line:#e6e9ef;
+    --bg:#f6f9fc;
+    --card:#ffffff;
+    /* 四分类配色 */
+    --sight:#10b981;     /* 景点 / 自然 */
+    --food:#f97316;      /* 美食 */
+    --culture:#6366f1;   /* 文化 / 历史 */
+    --shopping:#ec4899;  /* 购物 / 夜生活 */
+    --radius:18px;
+    --shadow:0 4px 24px rgba(10,37,64,.08);
+    --shadow-lg:0 18px 50px rgba(10,37,64,.16);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 10% -10%, #eef2ff 0%, rgba(238,242,255,0) 55%),
+      radial-gradient(1000px 500px at 100% 0%, #ffeef7 0%, rgba(255,238,247,0) 50%),
+      linear-gradient(180deg,#f6f9fc 0%,#eef2f7 100%);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1280px;margin:0 auto;padding:24px 22px 60px}
+
+  /* ---------- Banner ---------- */
+  .banner{
+    position:relative;
+    background:linear-gradient(135deg,#635bff 0%,#7c3aed 50%,#2563eb 100%);
+    border-radius:26px;
+    padding:34px 34px 30px;
+    color:#fff;
+    box-shadow:var(--shadow-lg);
+    overflow:hidden;
+  }
+  .banner::after{
+    content:"";position:absolute;right:-80px;top:-80px;width:320px;height:320px;
+    background:radial-gradient(circle, rgba(255,255,255,.25), rgba(255,255,255,0) 70%);
+  }
+  .banner .eyebrow{font-size:13px;letter-spacing:.18em;text-transform:uppercase;opacity:.85;margin:0 0 8px}
+  .banner h1{margin:0;font-size:40px;line-height:1.1;font-weight:800;letter-spacing:-.02em}
+  .banner .sub{margin:12px 0 0;opacity:.92;font-size:15px;max-width:560px}
+  .badges{display:flex;gap:14px;flex-wrap:wrap;margin-top:22px}
+  .badge{
+    background:rgba(255,255,255,.16);
+    backdrop-filter:blur(6px);
+    border:1px solid rgba(255,255,255,.25);
+    border-radius:16px;
+    padding:12px 18px;min-width:120px;
+  }
+  .badge .n{font-size:26px;font-weight:800;line-height:1}
+  .badge .l{font-size:12px;opacity:.85;margin-top:6px;letter-spacing:.04em}
+  .badge .n small{font-size:14px;font-weight:700;opacity:.9}
+
+  /* ---------- 控制条 ---------- */
+  .controls{
+    margin-top:20px;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 18px 14px;
+  }
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:12px;color:var(--ink-3);font-weight:600;letter-spacing:.02em}
+  .field input{
+    height:42px;border:1px solid var(--line);border-radius:12px;padding:0 14px;
+    font-size:14px;color:var(--ink);background:#fbfcfe;outline:none;transition:.15s;
+    min-width:160px;
+  }
+  .field input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .btn{
+    height:42px;border:none;border-radius:12px;padding:0 20px;font-size:14px;font-weight:700;
+    cursor:pointer;transition:.15s;white-space:nowrap;
+  }
+  .btn-primary{background:var(--primary);color:#fff;box-shadow:0 6px 16px rgba(99,91,255,.35)}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(99,91,255,.42)}
+  .btn-ghost{background:#f1f3f8;color:var(--ink-2)}
+  .btn-ghost:hover{background:#e8ebf3}
+  .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+  .hint{font-size:12px;color:var(--ink-3);margin-top:10px;line-height:1.6}
+  details.adv{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
+  details.adv summary{cursor:pointer;font-size:13px;color:var(--primary);font-weight:700;user-select:none}
+  details.adv .row{margin-top:12px}
+  .toggle-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .mini{font-size:11px;color:var(--ink-3)}
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex;gap:10px;margin:22px 0 16px;flex-wrap:wrap}
+  .tab{
+    border:1px solid var(--line);background:var(--card);color:var(--ink-2);
+    border-radius:13px;padding:10px 18px;font-weight:700;font-size:14px;cursor:pointer;
+    transition:.15s;box-shadow:var(--shadow)
+  }
+  .tab:hover{border-color:var(--primary)}
+  .tab.active{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 8px 20px rgba(99,91,255,.35)}
+
+  /* ---------- 主体两栏 ---------- */
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:22px;align-items:start}
+  @media (max-width:920px){.grid{grid-template-columns:1fr}}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+  .panel h2{margin:0 0 4px;font-size:18px;font-weight:800}
+  .panel .theme{font-size:13px;color:var(--ink-3);margin:0 0 16px}
+
+  /* ---------- 时间轴卡片 ---------- */
+  .timeline{position:relative;padding-left:6px}
+  .tl-item{position:relative;padding:0 0 16px 26px}
+  .tl-item::before{content:"";position:absolute;left:7px;top:24px;bottom:-2px;width:2px;background:var(--line)}
+  .tl-item:last-child::before{display:none}
+  .tl-dot{position:absolute;left:0;top:18px;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px var(--line)}
+  .card{
+    border:1px solid var(--line);border-left:5px solid var(--c,#ccc);
+    border-radius:14px;padding:13px 14px;background:#fbfcfe;cursor:pointer;transition:.15s;
+  }
+  .card:hover{transform:translateX(3px);box-shadow:var(--shadow);background:#fff}
+  .card.flash{box-shadow:0 0 0 3px var(--primary-soft);background:#fff}
+  .card .time{font-size:12px;font-weight:800;color:var(--ink-2)}
+  .card .head{display:flex;align-items:center;gap:8px;margin:4px 0 6px;flex-wrap:wrap}
+  .card .name{font-size:15px;font-weight:800;color:var(--ink)}
+  .chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;color:#fff;white-space:nowrap}
+  .card .desc{font-size:13px;color:var(--ink-2);line-height:1.6;margin:2px 0 8px}
+  .meta{display:flex;gap:14px;font-size:12px;color:var(--ink-3);flex-wrap:wrap}
+  .meta b{color:var(--ink);font-weight:700}
+
+  /* ---------- 地图 ---------- */
+  .mapbox{position:sticky;top:18px}
+  #map{width:100%;height:560px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#eef2f7}
+  @media (max-width:920px){#map{height:420px}.mapbox{position:static}}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--ink-2)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .empty{color:var(--ink-3);font-size:14px;text-align:center;padding:40px 10px;line-height:1.8}
+
+  /* ---------- 加载遮罩 ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(255,255,255,.72);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;z-index:50}
+  .overlay.show{display:flex}
+  .spinner{width:46px;height:46px;border:4px solid var(--primary-soft);border-top-color:var(--primary);
+    border-radius:50%;animation:spin .8s linear infinite}
+  .overlay .txt{margin-top:14px;font-weight:700;color:var(--ink)}
+  .loading-box{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(238,242,247,.85);z-index:5;border-radius:14px}
+  .loading-box.show{display:flex}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;
+    opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:#e11d48}
+  .info-card{font-family:inherit;min-width:200px}
+  .info-card .it{font-size:15px;font-weight:800;margin:0 0 4px}
+  .info-card .im{font-size:12px;color:#425466;line-height:1.6;margin:2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ Banner ============ -->
+  <header class="banner">
+    <p class="eyebrow">Travel Itinerary Planner</p>
+    <h1 id="title">规划你的下一趟旅程</h1>
+    <p class="sub" id="subtitle">输入目的地与旅游日期，AI 自动生成兼顾历史文化、美食、自然与夜生活的多日行程，并在地图上按序打点连线。</p>
+    <div class="badges">
+      <div class="badge"><div class="n" id="bDays">0</div><div class="l">天数 DAYS</div></div>
+      <div class="badge"><div class="n" id="bPois">0</div><div class="l">POI 数</div></div>
+      <div class="badge"><div class="n" id="bBudget">¥0</div><div class="l">总预算</div></div>
+    </div>
+  </header>
+
+  <!-- ============ 控制条 ============ -->
+  <section class="controls">
+    <div class="row">
+      <div class="field">
+        <label>目的地</label>
+        <input id="place" type="text" placeholder="如：成都 / 西安 / 杭州" value="成都" />
+      </div>
+      <div class="field">
+        <label>出发日期</label>
+        <input id="start" type="date" />
+      </div>
+      <div class="field">
+        <label>返程日期</label>
+        <input id="end" type="date" />
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" id="genBtn">✨ 生成行程</button>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-ghost" id="demoBtn">📋 载入示例</button>
+      </div>
+    </div>
+
+    <details class="adv">
+      <summary>⚙️ 高级设置（大模型 & 地图 Key）</summary>
+      <div class="row">
+        <div class="field">
+          <label>腾讯地图 JS API Key</label>
+          <input id="mapKey" type="text" placeholder="填入 Key 后点右侧加载" style="min-width:280px" />
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn btn-ghost" id="mapBtn">🗺️ 加载地图</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>API Base</label>
+          <input id="apiBase" type="text" placeholder="https://api.openai.com/v1" style="min-width:280px" />
+        </div>
+        <div class="field">
+          <label>API Key（大模型）</label>
+          <input id="apiKey" type="password" placeholder="sk-..." style="min-width:220px" />
+        </div>
+        <div class="field">
+          <label>模型</label>
+          <input id="model" type="text" placeholder="gpt-4o-mini" style="min-width:160px" />
+        </div>
+      </div>
+      <p class="mini">⚠️ 安全提示：以上密钥仅保存在你本机浏览器（localStorage），不会上传到除你指定的大模型服务以外的任何地方。请勿在公开/共享环境使用明文密钥。腾讯地图 Key 与 LLM Key 都需自行申请。</p>
+    </details>
+
+    <div class="toggle-row" id="mapStatus">
+      <span class="mini">地图状态：未加载（填入腾讯地图 Key 并点击「加载地图」后即可在右侧打点连线）</span>
+    </div>
+  </section>
+
+  <!-- ============ Tabs ============ -->
+  <nav class="tabs" id="tabs"></nav>
+
+  <!-- ============ 主体 ============ -->
+  <div class="grid" id="grid" style="display:none">
+    <!-- 左：时间轴 -->
+    <div class="panel">
+      <h2 id="dayTitle">DAY 1</h2>
+      <p class="theme" id="dayTheme"></p>
+      <div class="timeline" id="timeline"></div>
+    </div>
+    <!-- 右：地图 -->
+    <div class="mapbox">
+      <div class="panel" style="padding:12px">
+        <div style="position:relative">
+          <div id="map"></div>
+          <div class="loading-box" id="mapLoading"><div class="spinner"></div><div class="txt" style="margin-top:10px;color:var(--ink-2)">解析坐标中…</div></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--sight)"></i>景点 / 自然</span>
+          <span><i style="background:var(--food)"></i>美食</span>
+          <span><i style="background:var(--culture)"></i>文化 / 历史</span>
+          <span><i style="background:var(--shopping)"></i>购物 / 夜生活</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="empty" class="panel empty" style="margin-top:22px">
+    还没有行程。在上方输入「目的地 + 日期」后点击 <b>生成行程</b>，或点 <b>载入示例</b> 立即预览效果。
+  </div>
+
+</div>
+
+<div class="overlay" id="overlay"><div style="text-align:center"><div class="spinner"></div><div class="txt" id="ovTxt">生成中…</div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   旅游行程规划单文件版
+   模块：M1 数据模型 | M2 输入/生成 | M3 Stripe 外壳 | M4 时间轴卡片
+        | M5 腾讯地图 | M6 预算统计 | M7 兜底/响应式 | M8 打磨
+   ========================================================= */
+
+/* ---------- 分类配置（四色） ---------- */
+const CATEGORIES = {
+  sight:    { label:"景点 / 自然", color:getCSS('--sight'),    short:"景点" },
+  food:     { label:"美食",        color:getCSS('--food'),     short:"美食" },
+  culture:  { label:"文化 / 历史", color:getCSS('--culture'),  short:"文化" },
+  shopping: { label:"购物 / 夜生活", color:getCSS('--shopping'), short:"夜生活" }
+};
+function getCSS(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+/* ---------- 全局状态 ---------- */
+const state = {
+  plan:null,        // {title, city, summary, days:[{day,theme,pois:[...]}]}
+  activeDay:1,
+  tmapReady:false,
+  map:null, markerLayer:null, polylineLayer:null, infoWindow:null, geocoder:null
+};
+
+/* ---------- 工具 ---------- */
+function $(id){return document.getElementById(id);}
+function toast(msg, isErr){
+  const t=$('toast'); t.textContent=msg; t.className='toast show'+(isErr?' err':'');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',2600);
+}
+function daysBetween(a,b){
+  const d1=new Date(a), d2=new Date(b);
+  if(isNaN(d1)||isNaN(d2)) return 0;
+  return Math.max(1, Math.round((d2-d1)/86400000)+1);
+}
+
+/* 生成分类图钉（SVG data URI，离线可用，按色区分） */
+function markerIcon(color){
+  const svg="<svg xmlns='http://www.w3.org/2000/svg' width='32' height='42'>"+
+    "<path d='M16 1C7.7 1 1 7.7 1 16c0 10.5 15 25 15 25s15-14.5 15-25C31 7.7 24.3 1 16 1z' fill='"+color+"'/>"+
+    "<circle cx='16' cy='16' r='6.2' fill='#fff'/></svg>";
+  return "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+}
+
+/* =========================================================
+   M2：生成行程（通用大模型）
+   ========================================================= */
+async function generatePlan(){
+  const place=$('place').value.trim();
+  const start=$('start').value, end=$('end').value;
+  if(!place){ toast("请先填写目的地",true); return; }
+  let n = (start&&end)? daysBetween(start,end) : 3;
+  if(n>10){ n=10; toast("已限制最多 10 天"); }
+
+  const base=$('apiBase').value.trim()||"https://api.openai.com/v1";
+  const key=$('apiKey').value.trim();
+  const model=$('model').value.trim()||"gpt-4o-mini";
+
+  if(!key){ toast("请先在「高级设置」填入大模型 API Key；或点「载入示例」",true); return; }
+
+  $('overlay').classList.add('show'); $('ovTxt').textContent="AI 生成中…";
+
+  const sysPrompt =
+    "你是专业中文旅行规划师。根据用户提供的城市与天数，生成详细、真实、可落地的多日行程。"+
+    "必须且只能返回一个 JSON 对象，不要任何额外文字或代码块标记。结构如下：\n"+
+    "{\n"+
+    "  \"title\": \"行程总标题（含城市与天数）\",\n"+
+    "  \"city\": \"城市名\",\n"+
+    "  \"summary\": \"一句话行程亮点\",\n"+
+    "  \"days\": [\n"+
+    "    {\n"+
+    "      \"day\": 1,\n"+
+    "      \"theme\": \"当天主题（如：古都文化巡礼）\",\n"+
+    "      \"pois\": [\n"+
+    "        {\n"+
+    "          \"name\": \"地点名\",\n"+
+    "          \"type\": \"sight|food|culture|shopping\",\n"+
+    "          \"time\": \"09:00\",\n"+
+    "          \"address\": \"具体可地理编码地址（必须包含城市名）\",\n"+
+    "          \"duration\": \"约2小时\",\n"+
+    "          \"cost\": 50,\n"+
+    "          \"desc\": \"一句话亮点介绍\"\n"+
+    "        }\n"+
+    "      ]\n"+
+    "    }\n"+
+    "  ]\n"+
+    "}\n"+
+    "要求：\n"+
+    "1) type 取值：sight=景点/自然风光，food=美食，culture=文化/历史，shopping=购物/夜生活（夜市、酒吧街等归入此类）。\n"+
+    "2) 每天 4-7 个 POI，POI 的 time 须按时间先后顺序排列。\n"+
+    "3) cost 为单人预估花费（元），整数，无花费填 0。\n"+
+    "4) address 必须是真实存在、可被地图地理编码的具体地址，并包含城市名。\n"+
+    "5) 整体兼顾历史文化、美食、自然风光与夜生活四类体验。";
+  const userPrompt = "请为「"+place+"」规划 "+n+" 天行程"+
+    (start&&end?("（"+start+" 至 "+end+"）"):"")+"。";
+
+  try{
+    const resp = await fetch(base.replace(/\/$/,'')+"/chat/completions",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+key },
+      body: JSON.stringify({
+        model: model,
+        temperature:0.8,
+        response_format:{ type:"json_object" },
+        messages:[
+          { role:"system", content:sysPrompt },
+          { role:"user",   content:userPrompt }
+        ]
+      })
+    });
+    if(!resp.ok){
+      const txt=await resp.text();
+      throw new Error("HTTP "+resp.status+" "+txt.slice(0,200));
+    }
+    const data=await resp.json();
+    const content=data.choices?.[0]?.message?.content || "";
+    const plan=parsePlan(content, place, n);
+    await loadPlan(plan);
+    toast("行程已生成 🎉");
+  }catch(err){
+    console.error(err);
+    toast("生成失败："+err.message+"（若提示 CORS，请改用支持浏览器跨域的兼容服务，或先用示例）",true);
+  }finally{
+    $('overlay').classList.remove('show');
+  }
+}
+
+/* 解析大模型返回的 JSON（容错：去代码块、截取首尾括号） */
+function parsePlan(content, place, n){
+  let txt=content.trim().replace(/^```(?:json)?/i,'').replace(/```$/i,'').trim();
+  let obj=null;
+  try{ obj=JSON.parse(txt); }
+  catch(e){
+    const s=txt.indexOf('{'), e2=txt.lastIndexOf('}');
+    if(s>=0&&e2>s){ try{ obj=JSON.parse(txt.slice(s,e2+1)); }catch(e3){} }
+  }
+  if(!obj || !Array.isArray(obj.days)) throw new Error("返回内容不是合法行程 JSON");
+  // 兜底补齐天数
+  obj.city = obj.city || place;
+  obj.title = obj.title || (obj.city+" "+obj.days.length+"日游");
+  obj.days.forEach((d,i)=>{ d.day = d.day||(i+1); if(!Array.isArray(d.pois)) d.pois=[];
+    d.pois.forEach(p=>{ p.type = CATEGORIES[p.type]?p.type:"sight"; p.cost=Number(p.cost)||0; }); });
+  if(obj.days.length>n) obj.days=obj.days.slice(0,n);
+  return obj;
+}
+
+/* =========================================================
+   载入行程（含坐标解析）
+   ========================================================= */
+async function loadPlan(plan){
+  state.plan=plan; state.activeDay=1;
+  // 若地图已就绪，先解析全部坐标
+  if(state.tmapReady){ await geocodeAll(plan); }
+  renderBanner();
+  renderTabs();
+  renderDay();
+  $('grid').style.display="grid";
+  $('empty').style.display="none";
+}
+
+/* 用腾讯地图 Geocoder 解析每个 POI 坐标（GCJ-02） */
+async function geocodeAll(plan){
+  if(!state.geocoder) return;
+  const city=plan.city||"";
+  $('mapLoading').classList.add('show');
+  let pending=[];
+  plan.days.forEach(d=>d.pois.forEach(p=>{ if(p.lat==null||p.lng==null) pending.push(p); }));
+  await Promise.all(pending.map(async(p)=>{
+    try{
+      const res=await state.geocoder.getLocation({ address:p.address||p.name, region:city });
+      const loc=res?.result?.location;
+      if(loc){
+        const lat = (typeof loc.lat==='function')?loc.lat():loc.lat;
+        const lng = (typeof loc.lng==='function')?loc.lng():loc.lng;
+        if(lat&&lng){ p.lat=lat; p.lng=lng; }
+      }
+    }catch(e){ /* 单个失败忽略，保留无坐标 */ }
+  }));
+  $('mapLoading').classList.remove('show');
+}
+
+/* =========================================================
+   M3 + M6：Banner 与统计
+   ========================================================= */
+function renderBanner(){
+  const p=state.plan;
+  $('title').textContent=p.title||"我的行程";
+  const totalPois=p.days.reduce((a,d)=>a+d.pois.length,0);
+  const totalBudget=p.days.reduce((a,d)=>a+d.pois.reduce((x,o)=>x+(o.cost||0),0),0);
+  $('bDays').innerHTML=p.days.length+'<small> 天</small>';
+  $('bPois').textContent=totalPois;
+  $('bBudget').textContent='¥'+totalBudget.toLocaleString();
+  $('subtitle').textContent=p.summary||("共 "+p.days.length+" 天 · "+totalPois+" 个精选点 · 预估总预算 ¥"+totalBudget.toLocaleString());
+}
+
+/* =========================================================
+   Tabs
+   ========================================================= */
+function renderTabs(){
+  const t=$('tabs'); t.innerHTML="";
+  state.plan.days.forEach((d,i)=>{
+    const b=document.createElement('button');
+    b.className='tab'+(i===state.activeDay-1?' active':'');
+    b.textContent='DAY '+(i+1);
+    b.onclick=()=>{ state.activeDay=i+1; renderTabs(); renderDay(); };
+    t.appendChild(b);
+  });
+}
+
+/* =========================================================
+   M4：时间轴卡片
+   ========================================================= */
+function renderDay(){
+  const d=state.plan.days[state.activeDay-1];
+  if(!d) return;
+  $('dayTitle').textContent='DAY '+d.day;
+  $('dayTheme').textContent=d.theme||"";
+  const tl=$('timeline'); tl.innerHTML="";
+  // 按时间排序
+  const pois=[...d.pois].sort((a,b)=>String(a.time).localeCompare(String(b.time)));
+  pois.forEach(p=>{
+    // 先生成稳定 id，保证卡片 data-id 与地图 marker id、飞入高亮一致
+    if(p.id==null) p.id='p_'+Math.random().toString(36).slice(2,9);
+    const c=CATEGORIES[p.type]||CATEGORIES.sight;
+    const item=document.createElement('div'); item.className='tl-item';
+    item.innerHTML=
+      '<span class="tl-dot" style="background:'+c.color+'"></span>'+
+      '<div class="card" data-id="'+p.id+'" style="--c:'+c.color+'">'+
+        '<div class="time">'+escapeHtml(p.time||'')+'</div>'+
+        '<div class="head"><span class="name">'+escapeHtml(p.name||'')+'</span>'+
+          '<span class="chip" style="background:'+c.color+'">'+c.short+'</span></div>'+
+        '<div class="desc">'+escapeHtml(p.desc||'')+'</div>'+
+        '<div class="meta"><span>⏱ <b>'+(p.duration||'—')+'</b></span>'+
+          '<span>💰 <b>¥'+(p.cost||0)+'</b></span>'+
+          '<span>📍 '+(p.address||'')+'</span></div>'+
+      '</div>';
+    item.querySelector('.card').onclick=()=>flyTo(p);
+    tl.appendChild(item);
+  });
+  drawMap();
+}
+
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+/* =========================================================
+   M5：腾讯地图
+   ========================================================= */
+function loadTMap(){
+  const key=$('mapKey').value.trim();
+  if(!key){ toast("请先填入腾讯地图 Key",true); return; }
+  localStorage.setItem('tmap_key',key);
+  $('mapStatus').innerHTML='<span class="mini">地图状态：加载中…</span>';
+  const s=document.createElement('script');
+  s.src="https://map.qq.com/api/gljs?v=1&key="+encodeURIComponent(key);
+  s.onload=()=>{ try{ initMap(); }catch(e){ console.error(e); toast("地图初始化失败："+e.message,true);} };
+  s.onerror=()=>{ $('mapStatus').innerHTML='<span class="mini" style="color:#e11d48">地图状态：脚本加载失败，请检查 Key 或网络</span>'; };
+  document.head.appendChild(s);
+}
+
+function initMap(){
+  if(typeof TMap==='undefined'){ toast("TMap 未定义",true); return; }
+  const center=new TMap.LatLng(30.5728,104.0668); // 默认成都
+  state.map=new TMap.Map("map",{ center:center, zoom:12, pitch:0, rotation:0 });
+  state.geocoder=new TMap.service.Geocoder();
+
+  // 图钉样式（四分类）
+  const styles={};
+  Object.keys(CATEGORIES).forEach(k=>{
+    styles[k]=new TMap.MarkerStyle({ width:32, height:42, anchor:{x:16,y:42}, src:markerIcon(CATEGORIES[k].color) });
+  });
+  state.markerLayer=new TMap.MultiMarker({ id:"poi-layer", map:state.map, styles:styles, geometries:[] });
+  state.polylineLayer=new TMap.MultiPolyline({ id:"route-layer", map:state.map,
+    styles:{ route:new TMap.PolylineStyle({ color:"#635bff", width:5, borderWidth:1, borderColor:"#ffffff", showArrow:true }) },
+    geometries:[] });
+  state.infoWindow=new TMap.InfoWindow({ map:state.map, position:center, content:"", offset:{x:0,y:-30} });
+  state.infoWindow.close();
+
+  // 点击图钉 → 高亮卡片
+  state.markerLayer.on('click',(e)=>{
+    const id=e.geometry?.id; if(!id) return;
+    const p=findPoi(id); if(p) openInfo(p);
+  });
+
+  state.tmapReady=true;
+  $('mapStatus').innerHTML='<span class="mini" style="color:#10b981">地图状态：已就绪 ✓</span>';
+  // 若已有行程，补解析坐标并绘制
+  if(state.plan){ geocodeAll(state.plan).then(drawMap); }
+}
+
+function drawMap(){
+  if(!state.tmapReady || !state.map) return;
+  const d=state.plan?.days[state.activeDay-1];
+  if(!d) return;
+  const pois=[...d.pois].sort((a,b)=>String(a.time).localeCompare(String(b.time)));
+  const geos=[]; const pts=[];
+  pois.forEach(p=>{
+    if(p.lat==null||p.lng==null) return;
+    const ll=new TMap.LatLng(p.lat,p.lng);
+    pts.push(ll);
+    geos.push({ id:p.id||('p_'+Math.random()), styleId:p.type, position:ll,
+      properties:{ name:p.name } });
+  });
+  state.markerLayer.setGeometries(geos);
+  state.polylineLayer.setGeometries( pts.length>1 ? [{ id:"route_"+state.activeDay, styleId:"route", paths:pts }] : [] );
+
+  if(pts.length){
+    let minLat=Math.min(...pts.map(p=>p.getLat())), maxLat=Math.max(...pts.map(p=>p.getLat()));
+    let minLng=Math.min(...pts.map(p=>p.getLng())), maxLng=Math.max(...pts.map(p=>p.getLng()));
+    const bounds=new TMap.LatLngBounds(new TMap.LatLng(minLat,minLng), new TMap.LatLng(maxLat,maxLng));
+    state.map.fitBounds(bounds,{ padding:80, animation:true });
+  }
+}
+
+function flyTo(p){
+  if(p.lat==null||p.lng==null){
+    if(state.tmapReady && state.geocoder && p.address){
+      state.geocoder.getLocation({address:p.address,region:state.plan?.city||""}).then(res=>{
+        const loc=res?.result?.location; if(loc){
+          p.lat=(typeof loc.lat==='function')?loc.lat():loc.lat;
+          p.lng=(typeof loc.lng==='function')?loc.lng():loc.lng;
+          drawMap(); openInfo(p);
+        } else toast("无法解析该地点坐标",true);
+      }).catch(()=>toast("坐标解析失败",true));
+    } else { toast("该地点暂无坐标（请先加载地图）",true); }
+    return;
+  }
+  const ll=new TMap.LatLng(p.lat,p.lng);
+  state.map.panTo(ll,{ duration:700 });
+  setTimeout(()=>openInfo(p),300);
+}
+
+function openInfo(p){
+  const c=CATEGORIES[p.type]||CATEGORIES.sight;
+  const html='<div class="info-card"><p class="it">'+escapeHtml(p.name)+'</p>'+
+    '<p class="im"><span class="chip" style="background:'+c.color+'">'+c.short+'</span> '+escapeHtml(p.time||'')+'</p>'+
+    (p.desc?'<p class="im">'+escapeHtml(p.desc)+'</p>':'')+
+    '<p class="im">💰 ¥'+(p.cost||0)+' · ⏱ '+(p.duration||'—')+'</p>'+
+    (p.address?'<p class="im">📍 '+escapeHtml(p.address)+'</p>':'')+'</div>';
+  state.infoWindow.setPosition(new TMap.LatLng(p.lat,p.lng));
+  state.infoWindow.setContent(html);
+  state.infoWindow.open();
+  // 高亮对应卡片
+  document.querySelectorAll('.card').forEach(el=>{
+    el.classList.toggle('flash', el.getAttribute('data-id')===String(p.id));
+  });
+}
+
+function findPoi(id){
+  for(const d of (state.plan?.days||[])) for(const p of d.pois) if(String(p.id)===String(id)) return p;
+  return null;
+}
+
+/* =========================================================
+   M8：内置示例（成都 3 日，含真实坐标，无需 Key 可预览）
+   ========================================================= */
+function loadSample(){
+  const sample={
+    title:"成都 3 日 · 巴适慢游",
+    city:"成都",
+    summary:"历史人文、市井美食、熊猫自然与锦江夜生活的松弛组合。",
+    days:[
+      { day:1, theme:"古都文化与市井烟火", pois:[
+        { id:"s1", name:"武侯祠", type:"culture", time:"09:00", address:"成都市武侯区武侯祠大街231号", duration:"约2小时", cost:50, desc:"三国蜀汉文化圣地，红墙竹影极出片。", lat:30.6442, lng:104.0439 },
+        { id:"s2", name:"锦里古街", type:"shopping", time:"11:30", address:"成都市武侯区武侯祠大街231号附1号", duration:"约1.5小时", cost:0, desc:"川西民居小吃街，白天逛吃、夜里灯笼。", lat:30.6428, lng:104.0460 },
+        { id:"s3", name:"宽窄巷子", type:"culture", time:"14:00", address:"成都市青羊区金河路口宽窄巷子", duration:"约2小时", cost:0, desc:"老成都院落文化，喝茶掏耳朵。", lat:30.6697, lng:104.0567 },
+        { id:"s4", name:"奎星楼街", type:"food", time:"17:30", address:"成都市青羊区奎星楼街", duration:"约1.5小时", cost:80, desc:"本地人爱的串串与苍蝇馆子聚集地。", lat:30.6705, lng:104.0610 },
+        { id:"s5", name:"九眼桥酒吧街", type:"shopping", time:"20:30", address:"成都市武侯区九眼桥", duration:"约2小时", cost:120, desc:"锦江畔夜生活地标，江风配小酒。", lat:30.6400, lng:104.0830 }
+      ]},
+      { day:2, theme:"熊猫自然与舌尖盛宴", pois:[
+        { id:"s6", name:"成都大熊猫繁育研究基地", type:"sight", time:"08:00", address:"成都市成华区熊猫大道1375号", duration:"约3小时", cost:55, desc:"看顶流花花，清晨最活跃。", lat:30.7337, lng:104.1460 },
+        { id:"s7", name:"杜甫草堂", type:"culture", time:"12:30", address:"成都市青羊区青华路37号", duration:"约1.5小时", cost:50, desc:"诗圣故居，竹林溪桥清幽。", lat:30.6589, lng:104.0250 },
+        { id:"s8", name:"春熙路 / 太古里", type:"shopping", time:"15:00", address:"成都市锦江区中纱帽街8号", duration:"约2小时", cost:0, desc:"潮牌地标与裸眼 3D 大屏。", lat:30.6570, lng:104.0817 },
+        { id:"s9", name:"小龙坎火锅", type:"food", time:"18:30", address:"成都市锦江区春熙路附近", duration:"约1.5小时", cost:130, desc:"成都火锅代表，麻辣过瘾。", lat:30.6555, lng:104.0800 }
+      ]},
+      { day:3, theme:"山水自然与古镇闲游", pois:[
+        { id:"s10", name:"青城山（前山）", type:"sight", time:"09:00", address:"成都市都江堰市青城山镇", duration:"约4小时", cost:90, desc:"道教名山，幽静避暑。", lat:30.8997, lng:103.5660 },
+        { id:"s11", name:"都江堰景区", type:"culture", time:"14:00", address:"成都市都江堰市公园路", duration:"约2.5小时", cost:80, desc:"两千年不朽的水利奇迹。", lat:30.9986, lng:103.6170 },
+        { id:"s12", name:"南桥夜市", type:"shopping", time:"19:00", address:"成都市都江堰市南桥", duration:"约1.5小时", cost:60, desc:"蓝眼泪廊桥，夜市小吃收尾。", lat:30.9970, lng:103.6180 }
+      ]}
+    ]
+  };
+  loadPlan(sample).then(()=>toast("已载入示例（成都 3 日）"));
+}
+
+/* =========================================================
+   事件绑定 & 初始化
+   ========================================================= */
+function init(){
+  // 默认值：日期为今天 ~ 今天+2
+  const today=new Date();
+  const plus2=new Date(Date.now()+2*86400000);
+  const fmt=d=>d.toISOString().slice(0,10);
+  $('start').value=fmt(today); $('end').value=fmt(plus2);
+  // 回填已保存的设置
+  const saved={ base:localStorage.getItem('api_base'), key:localStorage.getItem('api_key'),
+    model:localStorage.getItem('api_model'), mkey:localStorage.getItem('tmap_key') };
+  if(saved.base) $('apiBase').value=saved.base;
+  if(saved.key) $('apiKey').value=saved.key;
+  if(saved.model) $('model').value=saved.model;
+  if(saved.mkey) $('mapKey').value=saved.mkey;
+
+  $('genBtn').onclick=()=>{
+    localStorage.setItem('api_base',$('apiBase').value.trim());
+    localStorage.setItem('api_key',$('apiKey').value.trim());
+    localStorage.setItem('api_model',$('model').value.trim());
+    generatePlan();
+  };
+  $('demoBtn').onclick=loadSample;
+  $('mapBtn').onclick=loadTMap;
+}
+init();
+</script>
+</body>
+</html>
