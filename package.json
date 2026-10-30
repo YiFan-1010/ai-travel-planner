@@ -1,0 +1,20 @@
+{
+  "name": "ai-travel-planner",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI 驱动的多日旅行路线规划器 · MapLibre + DeepSeek · 真实道路路线与 3D 地球",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.24.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}
