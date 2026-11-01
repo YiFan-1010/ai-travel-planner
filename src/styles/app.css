@@ -225,6 +225,37 @@ button:active,.btn:active,.tab:active,.chips button:active{transform:scale(.965)
   mask-image:linear-gradient(218deg,#000 14%,rgba(0,0,0,.6) 52%,transparent 88%);
 }
 .banner-top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+/* ---- 规划依据 ---- */
+.rag-note{position:relative;z-index:1;margin-top:16px}
+.rag-toggle{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:6px 13px;border-radius:var(--r-full);
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);
+  font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;
+  transition:color 180ms var(--e-out),border-color 180ms var(--e-out);
+}
+.rag-toggle:hover{color:var(--primary);border-color:var(--primary-line)}
+.rag-toggle svg{width:13px;height:13px}
+.rag-toggle .rag-chev{transition:transform 220ms var(--e-out)}
+.rag-note.open .rag-chev{transform:rotate(180deg)}
+.rag-list{
+  list-style:none;margin:0;padding:0;
+  display:grid;grid-template-rows:0fr;overflow:hidden;
+  transition:grid-template-rows 260ms var(--e-out),margin 260ms var(--e-out);
+}
+.rag-note.open .rag-list{grid-template-rows:1fr;margin-top:9px}
+.rag-list li{
+  overflow:hidden;
+  font-size:12px;line-height:1.65;color:var(--ink-2);
+  padding:7px 0;border-bottom:1px dashed var(--line);
+}
+.rag-list li:last-child{border-bottom:none}
+.rag-tag{
+  display:inline-block;margin-right:7px;padding:1px 7px;border-radius:var(--r-full);
+  background:var(--primary-soft);color:var(--primary);
+  font-size:10.5px;font-weight:800;vertical-align:1px;
+}
+
 /* ---- 多方案对比 ---- */
 .variant-bar{
   position:relative;z-index:1;

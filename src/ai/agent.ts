@@ -29,6 +29,7 @@ import {
   type Skeleton,
 } from './schema';
 import { geocodeAll, geoAvailable, getGeoConfig } from './tools';
+import { formatKnowledge, retrieve, type Hit } from './rag/index';
 import type {
   AgentStep,
   PlaceCandidate,
@@ -50,6 +51,8 @@ export interface GenerateOptions {
 export interface GenerateResult {
   plan: Plan;
   issues: PlanIssue[];
+  /** 本次参考了哪些本地知识，用于在界面上给出依据 */
+  knowledge: Hit[];
   stats: {
     geoHit: number;
     geoTotal: number;
@@ -110,6 +113,22 @@ async function locate(
  * 生成一份行程。
  * 任何一步失败都会抛出带中文说明的错误，交给 UI 直接展示。
  */
+/**
+ * 把用户输入拼成检索语句。
+ * 偏好里的兴趣、必去、不想要都是强信号，一起拿去召回。
+ */
+function buildRetrieveQuery(request: PlanRequest): string {
+  const parts: string[] = [request.destination];
+  const p = request.prefs;
+  if (p) {
+    if (Array.isArray(p.interests) && p.interests.length) parts.push(...p.interests);
+    if (p.pace) parts.push(p.pace);
+    if (p.must) parts.push(p.must);
+    if (p.avoid) parts.push(p.avoid);
+  }
+  return parts.join(' ');
+}
+
 export async function generatePlan(opts: GenerateOptions): Promise<GenerateResult> {
   const started = Date.now();
   const { request, config, onStep, signal } = opts;
@@ -133,11 +152,20 @@ export async function generatePlan(opts: GenerateOptions): Promise<GenerateResul
     if (signal?.aborted) throw new Error('已取消');
   };
 
-  /* ---------------- ① 规划 ---------------- */
+  /* ---------------- ① 检索 ---------------- */
+  /* 检索是纯内存计算，毫秒级。不单独占一步，
+     否则状态会闪一下就被「正在规划」盖掉，用户根本看不清 */
+  const hits = retrieve(buildRetrieveQuery(request), fallbackCity, 5);
+  const knowledge = formatKnowledge(hits);
+
+  /* 整个规划过程中都带着这句话：只在开头闪一下会被字数进度立刻盖掉 */
+  const ragNote = hits.length ? `参考 ${hits.length} 条本地知识` : '';
+
+  /* ---------------- ② 规划 ---------------- */
   emit({
     phase: 'plan',
     message: 'AI 正在规划行程',
-    detail: geoReady ? '先定主题和地点 坐标随后核对' : '先定主题和地点',
+    detail: ragNote || (geoReady ? '先定主题和地点 坐标随后核对' : '先定主题和地点'),
     progress: 4,
   });
 
@@ -145,7 +173,7 @@ export async function generatePlan(opts: GenerateOptions): Promise<GenerateResul
   const firstMsg = await chat(config, {
     messages: [
       { role: 'system', content: geoReady ? PLAN_SYSTEM : PLAN_SYSTEM_WITH_COORDS },
-      { role: 'user', content: buildPlanPrompt(request, !geoReady, opts.style) },
+      { role: 'user', content: buildPlanPrompt(request, !geoReady, opts.style, knowledge) },
     ],
     temperature: 0.8,
     maxTokens: Math.min(6000, 1200 + request.days * 700),
@@ -155,7 +183,7 @@ export async function generatePlan(opts: GenerateOptions): Promise<GenerateResul
       emit({
         phase: 'plan',
         message: 'AI 正在规划行程',
-        detail: `已写 ${written} 字`,
+        detail: ragNote ? `${ragNote} · 已写 ${written} 字` : `已写 ${written} 字`,
         progress: Math.min(28, 4 + written / 90),
       });
     },
@@ -279,6 +307,7 @@ export async function generatePlan(opts: GenerateOptions): Promise<GenerateResul
   return {
     plan,
     issues,
+    knowledge: hits,
     stats: {
       geoHit: toolHits,
       geoTotal,

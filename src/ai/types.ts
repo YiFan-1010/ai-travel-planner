@@ -82,7 +82,7 @@ export interface PlanPrefs {
 
 /** Agent 执行过程中的一步，用于 UI 实时展示思考链路 */
 export interface AgentStep {
-  phase: 'plan' | 'geocode' | 'check' | 'refine' | 'done';
+  phase: 'rag' | 'plan' | 'geocode' | 'check' | 'refine' | 'done';
   message: string;
   detail?: string;
   /** 0-100，用于进度条 */

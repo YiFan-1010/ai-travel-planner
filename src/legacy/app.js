@@ -52,7 +52,12 @@ var PLAN_KEY = 'travel_plan_cache_v1';
 // 把生成的行程存到本地，关掉页面再打开还在（也是离线可用的前提）
 function savePlanCache(plan) {
   try {
-    localStorage.setItem(PLAN_KEY, JSON.stringify({ at: Date.now(), plan: plan }));
+    /* 规划依据一起存：刷新页面后还能看到「这份行程参考了什么」 */
+    localStorage.setItem(PLAN_KEY, JSON.stringify({
+      at: Date.now(),
+      plan: plan,
+      knowledge: state && state.aiKnowledge ? state.aiKnowledge : null
+    }));
   } catch (e) {}
 }
 
@@ -62,6 +67,8 @@ function readPlanCache() {
     if (!raw) return null;
     var o = JSON.parse(raw);
     if (!o || !o.plan || !o.plan.days || !o.plan.days.length) return null;
+    /* 顺带把依据放回去，loadPlan 里会用它渲染 */
+    if (o.knowledge && o.knowledge.length) state.aiKnowledge = o.knowledge;
     return o.plan;
   } catch (e) { return null; }
 }
@@ -382,6 +389,41 @@ function loadSettings() {
 
 function saveSettings() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings)); } catch (e) {}
+}
+
+/* =========================================================================
+   规划依据：把本次 RAG 检索到的本地知识展示出来
+   评委和用户都能看到「这不是凭空生成的」
+   ========================================================================= */
+var RAG_TAG_LABEL = {
+  sight: '景点', food: '吃喝', avoid: '避雷',
+  stay: '住宿', move: '交通', season: '季节', rhythm: '节奏'
+};
+
+function renderKnowledge(hits) {
+  var box = $('ragNote');
+  var list = $('ragList');
+  var cnt = $('ragCount');
+  var toggle = $('ragToggle');
+  if (!box || !list) return;
+
+  if (!hits || !hits.length) {
+    box.style.display = 'none';
+    box.classList.remove('open');
+    list.innerHTML = '';
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    return;
+  }
+
+  box.style.display = 'block';
+  box.classList.remove('open');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  if (cnt) cnt.textContent = '参考了 ' + hits.length + ' 条本地知识';
+
+  list.innerHTML = hits.map(function (h) {
+    var label = RAG_TAG_LABEL[h.doc.tag] || '知识';
+    return '<li><span class="rag-tag">' + label + '</span>' + escapeHtml(h.doc.text) + '</li>';
+  }).join('');
 }
 
 function updateApiHint() {
@@ -2943,6 +2985,7 @@ async function callAgent(place, start, end, n, prefs, intro) {
 
     state.aiIssues = res.issues || [];
     state.aiStats = res.stats || null;
+    state.aiKnowledge = res.knowledge || [];
 
     /* 有提醒但没阻断，用 toast 点一下，别让用户以为一切完美 */
     var warns = (res.issues || []).filter(function (i) { return i.level === 'warn'; });
@@ -3071,9 +3114,11 @@ async function generateVariant(style) {
     stopLoading();
     state.aiStats = res.stats || null;
     state.aiIssues = res.issues || [];
+    state.aiKnowledge = res.knowledge || [];
 
     addVariant(label, res.plan);
     await loadPlan(res.plan);
+    renderKnowledge(state.aiKnowledge);
     toast('「' + label + '」方案已生成');
   } catch (e) {
     stopLoading();
@@ -3143,6 +3188,7 @@ async function generatePlan() {
     if (state.settings.refine) await refineCoords(plan);
 
     await loadPlan(plan);
+    renderKnowledge(state.aiKnowledge);
     resetVariants('默认', plan);
     stopLoading();
 
@@ -3177,6 +3223,8 @@ async function loadPlan(plan) {
   state.activeDay = 1;
   state.routeCache = {};
   savePlanCache(plan);
+  /* 切方案或载入示例时，上一份行程的规划依据要收掉 */
+  renderKnowledge(null);
 
   /* 目的地跟着当前行程走：恢复缓存、切换方案、重新生成后都对得上，
      否则会出现「展示西安行程、输入框还写着成都」 */
@@ -5364,6 +5412,7 @@ function init() {
     setTimeout(function () {
       if (state.plan) return;
       loadPlan(cachedPlan).then(function () {
+        renderKnowledge(state.aiKnowledge);
         toast('已恢复上次的行程');
       }).catch(function () {});
     }, state.settings.intro ? 1200 : 400);
@@ -5410,6 +5459,16 @@ function init() {
 
   $('genBtn').onclick = generatePlan;
   initVoiceInput();
+
+  var ragToggleBtn = $('ragToggle');
+  if (ragToggleBtn) {
+    ragToggleBtn.onclick = function () {
+      var box = $('ragNote');
+      if (!box) return;
+      var open = box.classList.toggle('open');
+      ragToggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+  }
 
   var vAdd = $('variantAdd');
   if (vAdd) {

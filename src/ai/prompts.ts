@@ -149,7 +149,8 @@ function prefsBlock(p: PlanPrefs): string {
 export function buildPlanPrompt(
   req: PlanRequest,
   needCoords: boolean,
-  style?: string
+  style?: string,
+  knowledge?: string
 ): string {
   const datePart =
     req.startDate && req.endDate ? `（${req.startDate} 至 ${req.endDate}）` : '';
@@ -164,6 +165,7 @@ export function buildPlanPrompt(
     '',
     prefsBlock(req.prefs),
     ...(styleHint ? ['', styleHint] : []),
+    ...(knowledge ? ['', '【本地知识】', knowledge] : []),
     '',
     tail,
   ].join('\n');

@@ -123,6 +123,16 @@
       <div class="badge" id="badgeBudget"><div class="n" id="bBudget">¥0</div><div class="l">Budget</div></div>
     </div>
 
+    <!-- 规划依据：这次参考了哪些本地知识，可展开 -->
+    <div class="rag-note" id="ragNote" style="display:none">
+      <button class="rag-toggle" id="ragToggle" type="button" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span id="ragCount">参考了 0 条本地知识</span>
+        <svg class="rag-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <ul class="rag-list" id="ragList"></ul>
+    </div>
+
     <!-- 多方案对比：生成第二个方案后才出现 -->
     <div class="variant-bar" id="variantBar" style="display:none">
       <span class="variant-label">方案</span>
