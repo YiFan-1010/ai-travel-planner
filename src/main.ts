@@ -14,8 +14,14 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/app.css';
 
+import { tools } from './ai/tools';
+import { generatePlan } from './ai/agent';
+
 // legacy 内部直接使用全局 maplibregl，挂到 window 上即可零改动复用
 (window as unknown as { maplibregl: typeof maplibregl }).maplibregl = maplibregl;
+
+// AI 能力统一出口，legacy 通过 window.__AI__ 调用
+(window as unknown as { __AI__: unknown }).__AI__ = { generatePlan, tools };
 
 // 动态 import 保证上面的全局挂载先生效（静态 import 会被提升到赋值之前）
 // @ts-expect-error legacy 是无类型的原始实现，随迁移逐步补类型

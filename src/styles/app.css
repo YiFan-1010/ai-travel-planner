@@ -1020,6 +1020,13 @@ select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3
 .spinner{width:40px;height:40px;border:3px solid var(--primary-soft);border-top-color:var(--primary);border-radius:50%;animation:spin .78s linear infinite}
 .overlay .txt{font-weight:800;color:var(--ink);font-size:14px;letter-spacing:-.01em}
 .overlay .elapsed{font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+/* Agent 执行明细：地理编码逐个命中、跨度检查结论都写在这 */
+.overlay .ov-detail{
+  font-size:11.5px;color:var(--ink-3);line-height:1.55;text-align:center;
+  max-width:min(440px,80vw);min-height:1.55em;
+  transition:opacity 200ms var(--e-out);
+  font-variant-numeric:tabular-nums;
+}
 /* 流式生成的实时进度条：一开始隐藏，收到第一块内容才出现 */
 .ov-bar{
   width:min(260px,62vw);height:3px;border-radius:2px;overflow:hidden;

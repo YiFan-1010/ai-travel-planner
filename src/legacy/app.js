@@ -29,6 +29,9 @@ var DEFAULT_SETTINGS = {
   apiBase: 'https://api.deepseek.com',
   apiKey: '',
   model: 'deepseek-chat',
+  // 高德 Web 服务 Key：配置后 Agent 走「工具定位」，坐标更准；
+  // 留空则退回「模型坐标 + 路线校验」
+  amapKey: '',
   intro: true,
   refine: false,
   routeMode: 'osrm',
@@ -465,6 +468,7 @@ function buildPrefsBlock(p) {
 function openSettings() {
   $('sApiBase').value = state.settings.apiBase || '';
   $('sApiKey').value = state.settings.apiKey || '';
+  $('sAmapKey').value = state.settings.amapKey || '';
   $('sModel').value = state.settings.model || '';
   $('sRouteMode').value = state.settings.routeMode || 'straight';
   $('sIntro').checked = !!state.settings.intro;
@@ -497,6 +501,7 @@ function applySettingsFromForm() {
   if (!/^https?:\/\//i.test(base)) { toast('API Base 需以 http(s):// 开头', true); return; }
   state.settings.apiBase = base.replace(/\/+$/, '');
   state.settings.apiKey = $('sApiKey').value.trim();
+  state.settings.amapKey = $('sAmapKey').value.trim();
   state.settings.model = $('sModel').value.trim() || DEFAULT_SETTINGS.model;
   state.settings.routeMode = $('sRouteMode').value;
   state.settings.intro = $('sIntro').checked;
@@ -2730,6 +2735,88 @@ function stopLoading() {
   if (wrap) wrap.classList.remove('on');
 }
 
+/* =========================================================================
+   行程生成：优先走新的 Agent 编排（规划 → 工具查坐标 → 校验 → 修正），
+   任何一环失败都自动回退到 v1 的一次性调用，保证功能不中断。
+   ========================================================================= */
+function simpleStreamProgress(len, text) {
+  var pois = (text.match(/"lat"\s*:/g) || []).length;
+  var days = (text.match(/"day"\s*:/g) || []).length;
+  var label = pois
+    ? '已规划 ' + Math.max(days, 1) + ' 天 · ' + pois + ' 个地点'
+    : '已写 ' + (len >= 1000 ? (len / 1000).toFixed(1) + 'k' : len) + ' 字';
+  var t = $('ovTxt');
+  if (t) t.textContent = label;
+  var d = $('ovDetail');
+  if (d) d.textContent = '兼容模式';
+}
+
+async function callAgent(place, start, end, n, prefs, intro) {
+  var s = state.settings;
+  var ai = window.__AI__;
+
+  if (!ai || typeof ai.generatePlan !== 'function') {
+    return await callLLM(place, start, end, n, prefs, simpleStreamProgress);
+  }
+
+  /* 把高德 Key 交给工具层：配了就走「工具定位」，没配走「模型坐标」 */
+  try {
+    if (ai.tools && ai.tools.setGeoConfig) {
+      ai.tools.setGeoConfig({ amapKey: (s.amapKey || '').trim() });
+    }
+  } catch (e) {}
+
+  var lastStatus = '';
+
+  try {
+    var res = await ai.generatePlan({
+      request: {
+        destination: place,
+        days: n,
+        startDate: start || undefined,
+        endDate: end || undefined,
+        prefs: prefs
+      },
+      config: {
+        baseUrl: s.apiBase,
+        apiKey: s.apiKey,
+        model: s.model
+      },
+      onStep: function (step) {
+        if (step.message && step.message !== lastStatus) {
+          lastStatus = step.message;
+          var t = $('ovTxt');
+          if (t) t.textContent = step.message;
+          if (intro) { try { intro.setStatus(step.message, step.detail || ''); } catch (e) {} }
+        }
+        if (step.detail) {
+          var d = $('ovDetail');
+          if (d) d.textContent = step.detail;
+        }
+        if (typeof step.progress === 'number') setOvBar(step.progress);
+      }
+    });
+
+    state.aiIssues = res.issues || [];
+    state.aiStats = res.stats || null;
+
+    /* 有提醒但没阻断，用 toast 点一下，别让用户以为一切完美 */
+    var warns = (res.issues || []).filter(function (i) { return i.level === 'warn'; });
+    if (warns.length) {
+      setTimeout(function () { toast('行程有 ' + warns.length + ' 处可以再优化'); }, 900);
+    }
+
+    return res.plan;
+  } catch (e) {
+    console.warn('[agent] 编排失败，回退到兼容模式', e);
+    var t2 = $('ovTxt');
+    if (t2) t2.textContent = 'AI 正在生成行程';
+    var d2 = $('ovDetail');
+    if (d2) d2.textContent = '已切换回兼容模式';
+    return await callLLM(place, start, end, n, prefs, simpleStreamProgress);
+  }
+}
+
 async function generatePlan() {
   var place = $('place').value.trim();
   var start = $('start').value, end = $('end').value;
@@ -2778,10 +2865,10 @@ async function generatePlan() {
 
   var plan;
   try {
-    plan = await callLLM(place, start, end, n, prefs, onStream);
+    plan = await callAgent(place, start, end, n, prefs, intro);
 
     if (intro) intro.setStatus(plan.city || place, '正在整理行程');
-    else $('ovTxt').textContent = '正在解析坐标';
+    else if (!state.aiStats) $('ovTxt').textContent = '正在解析坐标';
     setOvBar(100);
 
     if (state.settings.refine) await refineCoords(plan);
@@ -4813,6 +4900,7 @@ function init() {
   $('saveSettings').onclick = applySettingsFromForm;
   $('clearKeyBtn').onclick = function () {
     $('sApiKey').value = '';
+    $('sAmapKey').value = '';
     state.settings.apiKey = '';
     saveSettings();
     updateApiHint();

@@ -338,6 +338,11 @@
       <span class="tip">DeepSeek 推荐 deepseek-chat 或 deepseek-reasoner</span>
     </div>
     <div class="m-field">
+      <label>高德地图 Key（可选）</label>
+      <input id="sAmapKey" type="text" placeholder="留空则使用模型坐标" autocomplete="off" />
+      <span class="tip">填入后 AI 会调用高德核对每个地点的真实坐标 免费申请 restapi.amap.com</span>
+    </div>
+    <div class="m-field">
       <label>连线方式</label>
       <select id="sRouteMode">
         <option value="osrm">真实道路路线 推荐</option>
@@ -439,6 +444,7 @@
 <div class="overlay" id="overlay">
   <div class="spinner"></div>
   <div class="txt" id="ovTxt">生成中</div>
+  <div class="ov-detail" id="ovDetail"></div>
   <div class="ov-bar" id="ovBarWrap"><i id="ovBar"></i></div>
   <div class="elapsed" id="ovElapsed"></div>
 </div>
