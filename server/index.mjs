@@ -19,18 +19,29 @@ const fileEnv = loadEnv(path.join(rootDir, '.env'));
 const env = { ...fileEnv, ...process.env };
 
 const port = Number(env.PORT) || 8080;
-const handler = createHandler({ root: path.join(rootDir, 'dist'), env });
 
-const dist = path.join(rootDir, 'dist');
-if (!fs.existsSync(path.join(dist, 'index.html'))) {
-  console.warn('[warn] 未找到 dist/index.html，先执行 npm run build');
+/* 部署包用 web/ 装产物（避免被托管平台当成构建产物排除），本地开发用 dist/ */
+function pickWebRoot() {
+  for (const name of ['web', 'dist']) {
+    const p = path.join(rootDir, name);
+    if (fs.existsSync(path.join(p, 'index.html'))) return p;
+  }
+  return path.join(rootDir, 'dist');
+}
+
+const webRoot = pickWebRoot();
+const handler = createHandler({ root: webRoot, env });
+
+if (!fs.existsSync(path.join(webRoot, 'index.html'))) {
+  console.warn('[warn] 未找到静态产物，先执行 npm run build');
 }
 
 const server = http.createServer(handler);
 
-server.listen(port, () => {
+/* 显式绑 0.0.0.0：容器/托管平台都通过反代访问，绑 127.0.0.1 会连不上 */
+server.listen(port, '0.0.0.0', () => {
   const has = (k) => (env[k] ? '已配置' : '缺失');
-  console.log(`服务已启动  http://127.0.0.1:${port}`);
+  console.log(`服务已启动  http://0.0.0.0:${port}`);
   console.log(`  DEEPSEEK_API_KEY  ${has('DEEPSEEK_API_KEY')}`);
   console.log(`  AMAP_KEY          ${has('AMAP_KEY')}`);
   if (!env.DEEPSEEK_API_KEY && !env.AMAP_KEY) {

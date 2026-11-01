@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "envId": "{{envId}}",
+  "functionRoot": "./server",
+  "functions": [],
+  "cloudrun": {
+    "serviceName": "ai-travel-planner",
+    "source": ".",
+    "serverType": "container",
+    "serverConfig": {
+      "Port": 8080,
+      "Cpu": 0.5,
+      "Mem": 1,
+      "MinNum": 0,
+      "MaxNum": 2,
+      "OpenAccessTypes": ["PUBLIC"],
+      "InitialDelaySeconds": 20
+    }
+  }
+}

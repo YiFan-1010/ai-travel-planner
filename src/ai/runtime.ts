@@ -60,8 +60,8 @@ export async function detectRuntime(): Promise<RuntimeInfo> {
     const res = await fetch('/api/health', {
       cache: 'no-store',
       signal: ctrl.signal,
-      /* 别带上任何凭据，这是个公开探针 */
-      credentials: 'omit',
+      /* 必须带同源 cookie：托管平台靠它鉴权，omit 会拿到 403 */
+      credentials: 'same-origin',
     });
     clearTimeout(timer);
     if (!res.ok) throw new Error('no proxy');

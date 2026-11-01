@@ -5102,6 +5102,14 @@ function init() {
     try {
       state.landingIntro = createIntro(true);
       try { sessionStorage.setItem('travel_intro_seen', '1'); } catch (e) {}
+
+      /* 没人操作就自己进去：开场是门面，但不该成为进入的门槛 */
+      setTimeout(function () {
+        var el = $('intro');
+        if (!el || el.classList.contains('hidden')) return;
+        var sk = $('skipIntro');
+        if (sk) sk.click();
+      }, 9000);
     } catch (e) {}
   }
 
