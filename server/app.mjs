@@ -317,6 +317,145 @@ async function handleGeo(req, res, cfg, search) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 坐标转换（服务端只做一次，前端拿到的永远是 WGS-84）                  */
+/* ------------------------------------------------------------------ */
+
+const PI = Math.PI;
+const GCJ_A = 6378245.0;
+const GCJ_EE = 0.00669342162296594323;
+
+function outOfChina(lat, lng) {
+  return lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+}
+
+function transformLat(x, y) {
+  let ret =
+    -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  ret += ((20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0) / 3.0;
+  ret += ((20.0 * Math.sin(y * PI) + 40.0 * Math.sin((y / 3.0) * PI)) * 2.0) / 3.0;
+  ret += ((160.0 * Math.sin((y / 12.0) * PI) + 320 * Math.sin((y * PI) / 30.0)) * 2.0) / 3.0;
+  return ret;
+}
+
+function transformLng(x, y) {
+  let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  ret += ((20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0) / 3.0;
+  ret += ((20.0 * Math.sin(x * PI) + 40.0 * Math.sin((x / 3.0) * PI)) * 2.0) / 3.0;
+  ret += ((150.0 * Math.sin((x / 12.0) * PI) + 300.0 * Math.sin((x / 30.0) * PI)) * 2.0) / 3.0;
+  return ret;
+}
+
+function wgs84ToGcj02(lat, lng) {
+  if (outOfChina(lat, lng)) return [lat, lng];
+  let dLat = transformLat(lng - 105.0, lat - 35.0);
+  let dLng = transformLng(lng - 105.0, lat - 35.0);
+  const radLat = (lat / 180.0) * PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - GCJ_EE * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / (((GCJ_A * (1 - GCJ_EE)) / (magic * sqrtMagic)) * PI);
+  dLng = (dLng * 180.0) / ((GCJ_A / sqrtMagic) * Math.cos(radLat) * PI);
+  return [lat + dLat, lng + dLng];
+}
+
+/** 没有解析反函数，三轮迭代逼近，误差 < 1 米 */
+function gcj02ToWgs84(lat, lng) {
+  if (outOfChina(lat, lng)) return [lat, lng];
+  let wgsLat = lat;
+  let wgsLng = lng;
+  for (let i = 0; i < 3; i += 1) {
+    const [gLat, gLng] = wgs84ToGcj02(wgsLat, wgsLng);
+    wgsLat += lat - gLat;
+    wgsLng += lng - gLng;
+  }
+  return [wgsLat, wgsLng];
+}
+
+/**
+ * GET /api/search?q=&city=&limit=
+ *
+ * 世界模型的搜索框用。高德只覆盖中国境内，境外地名会返回空数组，
+ * 由前端决定是否回退到 Photon。
+ *
+ * 返回已转成 WGS-84 的统一结构，前端不需要再关心坐标系。
+ */
+async function handleSearch(req, res, cfg, search) {
+  if (req.method !== 'GET') return sendJson(res, 405, { error: 'method not allowed' });
+  if (!cfg.AMAP_KEY) return sendJson(res, 503, { error: '服务端未配置 AMAP_KEY' });
+
+  const rate = checkRate(clientIp(req), 'geo', cfg);
+  if (!rate.ok) {
+    res.setHeader('Retry-After', String(rate.retryAfter));
+    return sendJson(res, 429, { error: rate.msg });
+  }
+
+  const q = (search.get('q') || '').trim();
+  if (!q) return sendJson(res, 400, { error: '缺少 q' });
+
+  const city = (search.get('city') || '').trim();
+  const limit = Math.max(1, Math.min(15, Number(search.get('limit')) || 10));
+
+  const params = new URLSearchParams({
+    keywords: q,
+    city: city || '全国',
+    citylimit: city ? 'true' : 'false',
+    offset: String(limit),
+    page: '1',
+    extensions: 'base',
+    key: cfg.AMAP_KEY,
+  });
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 9000);
+
+  try {
+    const upstream = await fetch(`${cfg.AMAP_ENDPOINT}?${params}`, { signal: ctrl.signal });
+    const data = await upstream.json();
+
+    if (data.status !== '1') {
+      return sendJson(res, 200, {
+        results: [],
+        error: `${data.infocode || ''} ${data.info || '高德返回异常'}`.trim(),
+      });
+    }
+
+    const results = [];
+    for (const p of Array.isArray(data.pois) ? data.pois : []) {
+      const name = (p.name || '').trim();
+      const loc = (p.location || '').trim();
+      if (!name || !loc) continue;
+
+      const [lngRaw, latRaw] = loc.split(',').map(Number);
+      if (!Number.isFinite(latRaw) || !Number.isFinite(lngRaw)) continue;
+
+      const [lat, lng] = gcj02ToWgs84(latRaw, lngRaw);
+      const address = [p.pname, p.cityname, p.adname, p.address]
+        .filter((v) => v && v !== '[]')
+        .join(' ');
+
+      results.push({
+        name,
+        lng: Number(lng.toFixed(6)),
+        lat: Number(lat.toFixed(6)),
+        address,
+        type: p.type || '',
+        typecode: p.typecode || '',
+      });
+    }
+
+    sendJson(res, 200, { results });
+  } catch (e) {
+    const aborted = e?.name === 'AbortError';
+    sendJson(res, aborted ? 504 : 502, {
+      results: [],
+      error: aborted ? '高德超时' : '高德不可达',
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** GET /api/health —— 前端据此决定「免 Key 代理」还是「用户自带 Key」 */
 function handleHealth(res, cfg) {
   sendJson(res, 200, {
@@ -410,6 +549,7 @@ export function createHandler(options = {}) {
     if (p === '/api/health') return handleHealth(res, cfg);
     if (p === '/api/chat') return void handleChat(req, res, cfg);
     if (p === '/api/geo') return void handleGeo(req, res, cfg, url.searchParams);
+    if (p === '/api/search') return void handleSearch(req, res, cfg, url.searchParams);
 
     /* 开发期由 vite 中间件接管静态资源，这里只兜 API */
     if (options.apiOnly) return sendJson(res, 404, { error: 'not found' });

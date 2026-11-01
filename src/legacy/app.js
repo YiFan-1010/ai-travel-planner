@@ -1595,7 +1595,7 @@ function paintGsMessage(title, sub) {
   }
   if (sub) box.appendChild(document.createTextNode(sub));
   list.appendChild(box);
-  if (foot) foot.textContent = 'OpenStreetMap · Photon + Nominatim';
+  if (foot) foot.textContent = gsSourceLabel();
 }
 
 function paintGsLoading() {
@@ -1654,7 +1654,7 @@ function paintGsList() {
   });
 
   panel.style.display = 'block';
-  if (foot) foot.textContent = 'OpenStreetMap · ' + gsState.results.length + ' 个结果';
+  if (foot) foot.textContent = gsSourceLabel() + ' · ' + gsState.results.length + ' 个结果';
 }
 
 /* ---------- 地理编码：Photon + Nominatim 双源并行，交叉校核 ----------
@@ -1803,6 +1803,65 @@ function gsBoxArea(e) {
   return Math.abs(e[2] - e[0]) * Math.abs(e[3] - e[1]);
 }
 
+/* 服务端搜索代理（高德）
+   Photon / Nominatim 在国内被 DNS 污染（实测解析到内网地址），
+   只能当境外地名的兜底。国内地名一律先走这里，0.5 秒级返回。 */
+var GS_ADMIN_TYPES = ['国家', '省', '城市', '区县', '乡镇', '开发区', '岛屿'];
+
+function gsProxyReady() {
+  try {
+    var rt = window.__AI__ && window.__AI__.runtime ? window.__AI__.runtime() : null;
+    return !!(rt && rt.geo);
+  } catch (e) { return false; }
+}
+
+function gsFromProxy(p) {
+  if (!p || !p.name) return null;
+  var lat = +p.lat, lng = +p.lng;
+  if (!isFinite(lat) || !isFinite(lng)) return null;
+
+  /* 高德的 type 是「科教文化服务;学校;高等院校」这种分号串，
+     直接显示在列表里太吵，取最后一段最具体 */
+  var kindFull = p.type || '';
+  var kindShort = kindFull ? kindFull.split(';').pop() : '';
+
+  var isAdmin = false;
+  for (var i = 0; i < GS_ADMIN_TYPES.length; i++) {
+    if (kindFull.indexOf(GS_ADMIN_TYPES[i]) >= 0) { isAdmin = true; break; }
+  }
+
+  var addr = p.address || '';
+
+  return {
+    name: p.name,
+    lng: lng,
+    lat: lat,
+    addr: addr,
+    sub: addr,
+    kind: kindShort,
+    poi: !isAdmin,
+    admin: isAdmin,
+    srcs: ['amap']
+  };
+}
+
+function gsSourceLabel() {
+  return gsProxyReady() ? '高德地图 · 精确到门牌' : 'OpenStreetMap · Photon + Nominatim';
+}
+
+function gsFetchProxy(q) {
+  var url = '/api/search?q=' + encodeURIComponent(q) + '&limit=10';
+  var ctrl = new AbortController();
+  var timer = setTimeout(function () { ctrl.abort(); }, 9000);
+  return fetch(url, { signal: ctrl.signal })
+    .then(function (r) { if (!r.ok) throw new Error('proxy ' + r.status); return r.json(); })
+    .then(function (d) {
+      clearTimeout(timer);
+      return (d.results || []).map(gsFromProxy).filter(Boolean);
+    })
+    .catch(function () { clearTimeout(timer); return []; });
+}
+
 function gsFetchPhoton(q, extra) {
   var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=10&lang=default' + (extra || '');
   var ctrl = new AbortController();
@@ -1860,6 +1919,24 @@ async function globeGeocode(q) {
 
   gsState.searching = true;
   paintGsLoading();
+
+  /* 先试服务端代理（高德）：国内 0.5 秒级，且坐标已转成 WGS-84。
+     查不到（境外地名）再退回 Photon / Nominatim。 */
+  if (gsProxyReady()) {
+    var proxied = await gsFetchProxy(q);
+    if (seq !== gsState.seq) return;
+    if (proxied.length) {
+      proxied.sort(function (a, b) { return gsScore(b, q) - gsScore(a, q); });
+      var top = proxied.slice(0, 8);
+      top.forEach(function (r) { r.q = q; });
+      gsState.searching = false;
+      gsState.results = top;
+      gsState.active = 0;
+      paintGsList();
+      gsCachePut(q, top);
+      return;
+    }
+  }
 
   var photons = [], noms = [], shown = false;
 
@@ -2443,8 +2520,10 @@ function openGlobeView() {
   // 预热：搜索服务从本机握手要 1-2 秒，打开世界模型时就先把连接建好，
   // 瓦片模板也一起拿下来，用户真正搜索/定位时少等一截
   try {
-    fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent('北京') + '&limit=1')
-      .catch(function () {});
+    var warm = gsProxyReady()
+      ? '/api/search?q=' + encodeURIComponent('北京') + '&limit=1'
+      : 'https://photon.komoot.io/api/?q=' + encodeURIComponent('北京') + '&limit=1';
+    fetch(warm).catch(function () {});
   } catch (e) {}
   ensureTileTemplate();
 
