@@ -16,13 +16,20 @@ import './styles/app.css';
 
 import { tools } from './ai/tools';
 import { generatePlan } from './ai/agent';
+import { detectRuntime, runtime } from './ai/runtime';
 
 // legacy 内部直接使用全局 maplibregl，挂到 window 上即可零改动复用
 (window as unknown as { maplibregl: typeof maplibregl }).maplibregl = maplibregl;
 
-// AI 能力统一出口，legacy 通过 window.__AI__ 调用
-(window as unknown as { __AI__: unknown }).__AI__ = { generatePlan, tools };
+// 探测服务端能力：有代理就不用用户填 Key
+detectRuntime().then((rt) => {
+  // AI 能力统一出口，legacy 通过 window.__AI__ 调用
+  (window as unknown as { __AI__: unknown }).__AI__ = { generatePlan, tools, runtime: () => rt };
 
-// 动态 import 保证上面的全局挂载先生效（静态 import 会被提升到赋值之前）
-// @ts-expect-error legacy 是无类型的原始实现，随迁移逐步补类型
-import('./legacy/app.js');
+  // 动态 import 保证上面的全局挂载先生效（静态 import 会被提升到赋值之前）
+  // @ts-expect-error legacy 是无类型的原始实现，随迁移逐步补类型
+  import('./legacy/app.js');
+});
+
+/* 暴露给控制台，方便排查线上环境到底走的是哪条路 */
+(window as unknown as { __RUNTIME__: () => unknown }).__RUNTIME__ = () => runtime();

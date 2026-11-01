@@ -8,9 +8,11 @@
  * 应用内部永远只见 WGS-84，偏移不外溢。
  */
 import { gcj02ToWgs84 } from '../coord';
+import { runtime } from '../runtime';
 import type { PlaceCandidate } from '../types';
 
 const ENDPOINT = 'https://restapi.amap.com/v3/place/text';
+const PROXY = '/api/geo';
 const TIMEOUT = 9000;
 
 interface AmapPoi {
@@ -64,6 +66,7 @@ function kindBias(typecode: string): number {
 
 /**
  * 按名称搜 POI。
+ * @param key 用户自己的高德 Key；为空时走服务端代理
  * @throws 网络或配额问题会抛出，调用方据此切换到下一个数据源
  */
 export async function amapSearch(
@@ -72,7 +75,8 @@ export async function amapSearch(
   limit: number,
   key: string
 ): Promise<PlaceCandidate[]> {
-  if (!key) throw new Error('未配置高德 Key');
+  const viaProxy = !key && runtime().geo;
+  if (!key && !viaProxy) throw new Error('未配置高德 Key');
 
   const query = name.trim();
   if (!query) return [];
@@ -84,17 +88,23 @@ export async function amapSearch(
     offset: String(Math.max(1, Math.min(10, limit))),
     page: '1',
     extensions: 'base',
-    key,
   });
+  if (!viaProxy) params.set('key', key);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
 
   let data: AmapResponse;
   try {
-    const res = await fetch(`${ENDPOINT}?${params.toString()}`, { signal: ctrl.signal });
+    const res = await fetch(viaProxy ? `${PROXY}?${params}` : `${ENDPOINT}?${params}`, {
+      signal: ctrl.signal,
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     data = (await res.json()) as AmapResponse;
+    /* 代理层的错误也用同一套形状表达，转换一下 */
+    if (!data.status && (data as { error?: string }).error) {
+      throw new Error('RATE_LIMIT ' + (data as { error?: string }).error);
+    }
   } finally {
     clearTimeout(timer);
   }

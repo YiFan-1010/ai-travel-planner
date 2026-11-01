@@ -379,21 +379,55 @@ function saveSettings() {
 }
 
 function updateApiHint() {
+  updateKeyTips();
   var has = !!(state.settings.apiKey && state.settings.apiKey.trim());
   var box = $('apiHint');
   var txt = $('apiHintText');
   var btn = $('apiHintBtn');
+  var sb = $('settingsBtn');
+
   if (has) {
     box.className = 'api-hint ok';
     txt.textContent = '已配置 ' + (state.settings.model || 'deepseek-chat') + '  ' + state.settings.apiBase;
     btn.textContent = '修改';
-  } else {
-    box.className = 'api-hint';
-    txt.textContent = '尚未配置大模型 API Key 生成前请先完成设置';
-    btn.textContent = '去设置';
+    sb.className = 'settings-btn ok';
+    return;
   }
-  var sb = $('settingsBtn');
-  if (has) sb.className = 'settings-btn ok'; else sb.className = 'settings-btn';
+
+  /* 没有自有 Key，但服务端提供代理时不算问题，只是告知 */
+  if (llmReady()) {
+    box.className = 'api-hint ok';
+    txt.textContent = '使用服务端代理生成 无需填写 API Key';
+    btn.textContent = '用我自己的 Key';
+    sb.className = 'settings-btn ok';
+    return;
+  }
+
+  box.className = 'api-hint';
+  txt.textContent = '尚未配置大模型 API Key 生成前请先完成设置';
+  btn.textContent = '去设置';
+  sb.className = 'settings-btn';
+}
+
+/* 设置弹窗里的说明随运行时变：代理可用时告诉用户「留空就行」 */
+function updateKeyTips() {
+  var capTip = $('sApiKeyTip');
+  var geo = $('sAmapKeyTip');
+  var rt = null;
+  try {
+    rt = window.__AI__ && window.__AI__.runtime ? window.__AI__.runtime() : null;
+  } catch (e) { rt = null; }
+
+  if (capTip) {
+    capTip.textContent = rt && rt.proxy
+      ? '留空即用服务端代理 每人每小时 ' + (rt.chatPerHour || 12) + ' 次 填自己的 Key 不限次数'
+      : '仅保存在本机 localStorage 不会上传到除该 API 服务外的任何地方';
+  }
+  if (geo) {
+    geo.textContent = rt && rt.geo
+      ? '留空即用服务端代理查坐标 填自己的 Key 可以查更多次'
+      : '填入后 AI 会调用高德核对每个地点的真实坐标 免费申请 restapi.amap.com';
+  }
 }
 
 /* =========================================================================
@@ -570,6 +604,26 @@ var SYS_PROMPT = [
   '7) center 为该城市中心点的 WGS-84 坐标。',
   '8) 用户明确「不想要」的项目一律不要安排；预算档位影响餐厅、门票与住宿建议的价位。'
 ].join('\n');
+
+/* 大模型能不能用：自有 Key 直连，或服务端代理代发 */
+function llmReady() {
+  var s = state.settings;
+  if (s.apiKey) return true;
+  try {
+    var rt = window.__AI__ && window.__AI__.runtime ? window.__AI__.runtime() : null;
+    return !!(rt && rt.proxy);
+  } catch (e) { return false; }
+}
+
+/* 地理编码能不能用：自有高德 Key，或服务端代理 */
+function geoReady() {
+  var s = state.settings;
+  if (s.amapKey) return true;
+  try {
+    var rt = window.__AI__ && window.__AI__.runtime ? window.__AI__.runtime() : null;
+    return !!(rt && rt.geo);
+  } catch (e) { return false; }
+}
 
 async function callLLM(place, start, end, n, prefs, onProgress) {
   var s = state.settings;
@@ -2762,7 +2816,8 @@ async function callAgent(place, start, end, n, prefs, intro) {
   /* 把高德 Key 交给工具层：配了就走「工具定位」，没配走「模型坐标」 */
   try {
     if (ai.tools && ai.tools.setGeoConfig) {
-      ai.tools.setGeoConfig({ amapKey: (s.amapKey || '').trim() });
+      var k = (s.amapKey || '').trim();
+      ai.tools.setGeoConfig({ amapKey: k, useProxy: !k && geoReady() });
     }
   } catch (e) {}
 
@@ -2808,6 +2863,8 @@ async function callAgent(place, start, end, n, prefs, intro) {
 
     return res.plan;
   } catch (e) {
+    /* 没有自有 Key 时，兼容模式那条路必然也走不通，直接抛原始错误 */
+    if (!s.apiKey) throw e;
     console.warn('[agent] 编排失败，回退到兼容模式', e);
     var t2 = $('ovTxt');
     if (t2) t2.textContent = 'AI 正在生成行程';
@@ -2880,7 +2937,7 @@ async function generateVariant(style) {
   if (!place) { toast('请先填写目的地', true); return; }
 
   var s = state.settings;
-  if (!s.apiKey) { openSettings(); toast('请先配置 API Key', true); return; }
+  if (!llmReady()) { openSettings(); toast('请先配置 API Key', true); return; }
   if (!window.__AI__ || typeof window.__AI__.generatePlan !== 'function') {
     toast('AI 模块未就绪', true);
     return;
@@ -2899,7 +2956,8 @@ async function generateVariant(style) {
 
   try {
     if (window.__AI__.tools && window.__AI__.tools.setGeoConfig) {
-      window.__AI__.tools.setGeoConfig({ amapKey: (s.amapKey || '').trim() });
+      var k2 = (s.amapKey || '').trim();
+      window.__AI__.tools.setGeoConfig({ amapKey: k2, useProxy: !k2 && geoReady() });
     }
 
     var res = await window.__AI__.generatePlan({
@@ -2950,7 +3008,7 @@ async function generatePlan() {
   var prefs = readPrefs();
   savePrefs(prefs);
 
-  if (!state.settings.apiKey) {
+  if (!llmReady()) {
     openSettings();
     toast('请先配置 API Key', true);
     return;
@@ -4291,7 +4349,7 @@ function applyAiPlan(newPlan, changed) {
 async function aiAdjust(text) {
   if (aiState.busy) return;
   var s = state.settings;
-  if (!s.apiKey) { openSettings(); toast('请先配置 API Key', true); return; }
+  if (!llmReady()) { openSettings(); toast('请先配置 API Key', true); return; }
   if (!state.plan) { toast('先生成或载入一份行程', true); return; }
 
   aiState.busy = true;
@@ -5075,6 +5133,16 @@ function init() {
         toast('已恢复上次的行程');
       }).catch(function () {});
     }, state.settings.intro ? 1200 : 400);
+  } else {
+    /* 首次访问没有本地行程：直接摆一份现成的。
+       评委/新用户打开链接如果看到空白页，很可能就关掉了。 */
+    setTimeout(function () {
+      if (state.plan) return;
+      loadSample();
+      setTimeout(function () {
+        if (state.plan && llmReady()) toast('这是示例 改掉目的地就能生成你的');
+      }, 1400);
+    }, state.settings.intro ? 2400 : 900);
   }
   $('cancelSettings').onclick = closeSettings;
   $('saveSettings').onclick = applySettingsFromForm;

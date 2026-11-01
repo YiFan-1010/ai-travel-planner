@@ -27,6 +27,8 @@ const REQUEST_TIMEOUT = 9000;
 export interface GeoConfig {
   /** 高德 Web 服务 Key，配置后优先使用 */
   amapKey?: string;
+  /** 走同源 /api/geo 代理，由服务端持 Key（线上免填 Key 的形态） */
+  useProxy?: boolean;
   /** 强制关闭 Photon（已知网络不可达时可省掉 9 秒超时） */
   disablePhoton?: boolean;
 }
@@ -35,6 +37,11 @@ let geoConfig: GeoConfig = {};
 
 export function setGeoConfig(cfg: GeoConfig): void {
   geoConfig = { ...geoConfig, ...cfg };
+}
+
+/** 有没有可用的地理编码能力（自有 Key 或服务端代理） */
+export function geoAvailable(): boolean {
+  return Boolean(geoConfig.amapKey || geoConfig.useProxy);
 }
 
 export function getGeoConfig(): GeoConfig {
@@ -249,7 +256,8 @@ export async function searchPlace(
   const query = name.trim();
   if (!query) return [];
 
-  const useAmap = Boolean(geoConfig.amapKey);
+  /* 自有 Key 优先，其次服务端代理；都没有就只能靠模型坐标 */
+  const useAmap = Boolean(geoConfig.amapKey) || geoConfig.useProxy === true;
   const cacheKey = `${useAmap ? 'amap' : 'photon'}|${city}|${query}|${limit}`;
 
   const cached = readCache(cacheKey);
@@ -257,8 +265,8 @@ export async function searchPlace(
 
   /* ① 高德：配了它就是主源，失败直接抛，
         让批量层做退避重试。不退到 Photon —— 那条路在国内必然干等 9 秒 */
-  if (useAmap && geoConfig.amapKey) {
-    const list = await amapSearch(query, city, limit, geoConfig.amapKey);
+  if (useAmap) {
+    const list = await amapSearch(query, city, limit, geoConfig.amapKey || '');
     if (list.length > 0) writeCache(cacheKey, list);
     return list;
   }

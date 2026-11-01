@@ -7,10 +7,45 @@
  * 兼容任何 OpenAI 格式的端点（DeepSeek / Moonshot / 本地 vLLM 等）。
  */
 
+import { runtime } from './runtime';
+
 export interface LlmConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+}
+
+/**
+ * 决定这一请求怎么发：
+ *   有 Key    → 直连用户填的端点（不占服务端额度）
+ *   无 Key    → 走同源 /api/chat，由服务端持 Key 代发
+ *   都没有    → 报错，引导去设置
+ */
+function resolveEndpoint(cfg: LlmConfig): { url: string; headers: Record<string, string> } {
+  const hasOwnKey = Boolean(cfg.apiKey && cfg.apiKey.trim());
+  const proxy = runtime();
+
+  if (!hasOwnKey) {
+    if (proxy.proxy) {
+      return {
+        url: '/api/chat',
+        headers: { 'Content-Type': 'application/json' },
+      };
+    }
+    throw new Error(
+      proxy.checked
+        ? '未配置 API Key，当前页面也没有可用的服务端代理'
+        : '未配置 API Key，请先在设置中填写'
+    );
+  }
+
+  return {
+    url: cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + cfg.apiKey,
+    },
+  };
 }
 
 export interface ToolCall {
@@ -78,9 +113,7 @@ interface StreamChunk {
  * 端点若返回非 SSE（个别兼容层不支持流式），自动退回整体解析。
  */
 export async function chat(cfg: LlmConfig, opts: ChatOptions): Promise<ChatResult> {
-  if (!cfg.apiKey) throw new Error('缺少 API Key');
-
-  const url = cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions';
+  const { url, headers } = resolveEndpoint(cfg);
 
   const body: Record<string, unknown> = {
     model: cfg.model || 'deepseek-chat',
@@ -95,7 +128,8 @@ export async function chat(cfg: LlmConfig, opts: ChatOptions): Promise<ChatResul
   }
 
   const ctrl = new AbortController();
-  let idleTimer = 0;
+  /* 同时兼容浏览器（number）与 Node（Timeout 对象）的返回值 */
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
   const arm = (ms: number): void => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => ctrl.abort(), ms);
@@ -103,7 +137,7 @@ export async function chat(cfg: LlmConfig, opts: ChatOptions): Promise<ChatResul
   const disarm = (): void => {
     if (idleTimer) {
       clearTimeout(idleTimer);
-      idleTimer = 0;
+      idleTimer = null;
     }
   };
 
@@ -118,10 +152,7 @@ export async function chat(cfg: LlmConfig, opts: ChatOptions): Promise<ChatResul
   try {
     res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + cfg.apiKey,
-      },
+      headers,
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
@@ -136,10 +167,23 @@ export async function chat(cfg: LlmConfig, opts: ChatOptions): Promise<ChatResul
     disarm();
     let detail = '';
     try {
-      detail = (await res.text()).slice(0, 200);
+      detail = (await res.text()).slice(0, 300);
     } catch {
       /* ignore */
     }
+
+    /* 代理层返回 {error: "..."}，直接用它给的文案，比裸 JSON 友好 */
+    let proxyMsg = '';
+    try {
+      const j = JSON.parse(detail) as { error?: string; detail?: string };
+      if (j && typeof j.error === 'string' && j.error) {
+        proxyMsg = j.error + (j.detail ? '：' + j.detail.slice(0, 120) : '');
+      }
+    } catch {
+      /* 不是 JSON，走通用分支 */
+    }
+    if (proxyMsg) throw new Error(proxyMsg);
+
     const hint =
       res.status === 401
         ? 'API Key 无效'

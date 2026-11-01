@@ -28,7 +28,7 @@ import {
   validatePlan,
   type Skeleton,
 } from './schema';
-import { geocodeAll, getGeoConfig } from './tools';
+import { geocodeAll, geoAvailable, getGeoConfig } from './tools';
 import type {
   AgentStep,
   PlaceCandidate,
@@ -115,9 +115,9 @@ export async function generatePlan(opts: GenerateOptions): Promise<GenerateResul
   const { request, config, onStep, signal } = opts;
   const fallbackCity = request.destination;
 
-  /* 只有配了高德 Key 才算「有地理编码能力」——
+  /* 有自有高德 Key，或服务端提供代理，才算「有地理编码能力」——
      Photon 在国内 DNS 被污染，不能作为依赖 */
-  const geoReady = Boolean(getGeoConfig().amapKey);
+  const geoReady = geoAvailable() && Boolean(getGeoConfig().amapKey || getGeoConfig().useProxy);
 
   let lastPlanEmit = 0;
   const emit = (s: Omit<AgentStep, 'at'>): void => {

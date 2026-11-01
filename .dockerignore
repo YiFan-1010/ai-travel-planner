@@ -1,0 +1,22 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.research
+.vscode
+.idea
+archive
+docs
+
+# 文档与截图不打进镜像
+*.md
+*.png
+*.jpg
+*.log
+
+npm-debug.log*
+.DS_Store
+Thumbs.db

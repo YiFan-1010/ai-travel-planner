@@ -137,23 +137,85 @@ npm install
 npm run dev          # http://127.0.0.1:5173
 ```
 
-生产构建：
+生产构建与本地运行完整版（含 API 代理）：
 
 ```bash
-npm run build        # 类型检查 + 打包到 dist/
-npm run preview      # 预览构建产物
+cp .env.example .env # 填入 DEEPSEEK_API_KEY / AMAP_KEY
+npm start            # 构建 + 启动 http://127.0.0.1:8080
 ```
 
-> 如果只想看看效果，`archive/v1-single-file.html` 是工程化之前的单文件版本，
-> 双击即可运行，不需要 Node 环境。
+### 两种运行形态
 
-首次使用需要配置大模型 API Key：
+应用会启动时探一次 `/api/health` 自动判断，用户不需要选择：
 
-1. 点击右上角齿轮 → API 配置
-2. 填入 Base URL（默认 `https://api.deepseek.com`）、Model（默认 `deepseek-chat`）、API Key
-3. 配置**只保存在浏览器 localStorage**，不会写入代码或上传
+| 形态 | 触发条件 | 用户的感受 |
+|---|---|---|
+| **服务端代理** | 存在 `/api` 且服务端配了 Key | 打开就能用，不用填 Key，有每日限额 |
+| **自带 Key** | 纯静态托管（无 `/api`） | 引导去设置里填自己的 Key |
 
-没有 Key 也可以点击「载入示例」查看内置的成都 3 日行程。
+填了自己的 Key 时**优先走直连**，不消耗服务端额度；留空才走代理。
+两条路的前端逻辑完全一致，只是请求地址不同。
+
+### 不想装 Node
+
+`archive/v1-single-file.html` 是工程化之前的单文件版本，双击即可运行，
+但它是纯静态形态，必须自己填 Key。
+
+---
+
+## 部署
+
+### 为什么需要一个服务端
+
+Key 放在前端等于公开：打包后的 JS 里明文可读，任何人 F12 都能拿到并刷爆额度。
+所以线上必须有东西替用户持有 Key。`server/` 就是这一层，只有 400 行，零依赖。
+
+### 方式一：任意支持 Node 的平台（推荐）
+
+```bash
+npm run build
+npm run serve        # 或 PORT=3000 node server/index.mjs
+```
+
+一个进程同时提供静态页面与 `/api`，SSE 流式完整支持（不经过任何缓冲层）。
+
+平台侧只需两个环境变量：
+
+| 变量 | 说明 |
+|---|---|
+| `DEEPSEEK_API_KEY` | 大模型 Key，没有则前端退化为「要求用户自带」 |
+| `AMAP_KEY` | 高德 Web 服务 Key，没有则坐标退化为模型自估 |
+
+其余可选变量见 `.env.example`。
+
+### 方式二：Docker
+
+```bash
+docker build -t ai-travel-planner .
+docker run -p 8080:8080 \
+  -e DEEPSEEK_API_KEY=sk-xxx \
+  -e AMAP_KEY=xxx \
+  ai-travel-planner
+```
+
+`Dockerfile` 是两阶段构建，最终镜像只含 `dist/` 与 `server/`，不含源码、依赖与任何 `.env`。
+
+### 方式三：纯静态（无代理）
+
+```bash
+npm run build
+# 把 dist/ 整个丢到任意静态托管
+```
+
+此时前端自动切换到「自带 Key」模式，用户需要自己填。
+
+### 密钥与限额
+
+- `.env` 在 `.gitignore` 与 `.dockerignore` 双重排除，从未进入 Git 历史
+- 服务端对每个 IP 做三层限流：小时、天、全局天，默认 12 次/小时/人
+- 前端打包产物里搜不到任何 Key —— 这是这套架构存在的全部理由
+
+> 评委/访客拿到链接直接能用，不用注册、不用申请 Key，也不需要知道 Key 是什么。
 
 ---
 
@@ -164,18 +226,32 @@ npm run preview      # 预览构建产物
 ├── index.html              入口 HTML（仅结构，无内联样式与脚本）
 ├── src/
 │   ├── main.ts             装配入口：挂载 MapLibre 全局、引入样式、加载 legacy
+│   ├── ai/
+│   │   ├── agent.ts        编排：规划 → 落地 → 体检 → 修正
+│   │   ├── tools.ts        工具层：多源地理编码、路线可行性、距离
+│   │   ├── client.ts       流式客户端，支持 tools 与代理模式
+│   │   ├── runtime.ts      启动时探测服务端能力
+│   │   ├── schema.ts       行程 JSON 校验与修复
+│   │   ├── prompts.ts      提示词与风格预设
+│   │   ├── coord.ts        GCJ-02 / BD-09 / WGS-84 互转
+│   │   └── geo/amap.ts     高德 POI 搜索
 │   ├── styles/
 │   │   └── app.css         设计系统与全部组件样式
 │   └── legacy/
 │       └── app.js          v1 业务实现（约 5000 行，随迭代逐步迁出）
+├── server/
+│   ├── app.mjs             API 代理 + 限流 + 静态托管（零依赖，前后端共用）
+│   └── index.mjs           线上入口，读 .env 后启动
 ├── docs/
 │   ├── 开源地图调研与落地方案.md    为什么放弃商业地图、WGS-84 坐标系论证
 │   └── 初版技术选型.md             第一版方案对比
 ├── archive/
 │   ├── v1-single-file.html  工程化前的单文件版本，可独立运行
 │   └── v0-tmap.html         最早的原型（腾讯地图 + GCJ-02），保留作演进记录
-├── vite.config.ts
+├── vite.config.ts          构建配置 + 开发期 API 中间件（复用 server/app.mjs）
 ├── tsconfig.json
+├── Dockerfile              两阶段构建，镜像只含 dist 与 server
+├── .env.example            环境变量模板
 └── package.json
 ```
 

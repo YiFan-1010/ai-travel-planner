@@ -8,13 +8,19 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "serve": "node server/index.mjs",
+    "start": "npm run build && node server/index.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^5.24.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "typescript": "^5.7.2",
     "vite": "^6.0.7"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
