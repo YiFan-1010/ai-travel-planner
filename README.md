@@ -2,7 +2,12 @@
 
 > 输入目的地和天数，AI 生成可落地的多日行程，并在真实地图上还原每天的真实道路路线。
 
-一个纯前端单页应用。地图用 MapLibre + OpenStreetMap 全链路免 Key 数据，行程由大模型流式生成，路线走 OSRM 真实路网，坐标精确到街区。
+**在线体验**：https://ai-travel-planner-09617.app.workbuddy.host/?sharecode=4TJPTBB5G4
+
+不需要注册、不需要填 API Key，打开输入「杭州 3 天」就能生成。
+（分享链接必须带上 `?sharecode=` 参数，否则会被拦截）
+
+一个 Vite + TypeScript 单页应用 + 一层 Node 代理。地图用 MapLibre + OpenStreetMap 全链路免 Key 数据，行程由大模型流式生成并经工具核对真实坐标，路线走 OSRM 真实路网。
 
 ---
 

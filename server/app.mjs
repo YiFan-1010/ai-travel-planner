@@ -9,6 +9,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const MIME = {
@@ -506,10 +507,29 @@ function serveStatic(req, res, root) {
     const ext = path.extname(target).toLowerCase();
     /* 带 hash 的产物长缓存，index.html 不缓存 */
     const hashed = /-[A-Za-z0-9_]{8,}\.(js|css|woff2|png|svg|webp)$/.test(target);
+    const cacheControl = hashed ? 'public, max-age=31536000, immutable' : 'no-cache';
+
+    if (GZIP_EXT.has(ext) && st.size > 1024 && acceptsGzip(req)) {
+      try {
+        const gz = gzipFor(target, st.mtimeMs);
+        res.writeHead(200, {
+          'Content-Type': MIME[ext] || 'application/octet-stream',
+          'Content-Encoding': 'gzip',
+          'Content-Length': gz.length,
+          Vary: 'Accept-Encoding',
+          'Cache-Control': cacheControl,
+        });
+        res.end(gz);
+        return;
+      } catch {
+        /* 压缩失败就退回原文件，不能因为省流量把页面搞挂 */
+      }
+    }
+
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
       'Content-Length': st.size,
-      'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
+      'Cache-Control': cacheControl,
     });
     fs.createReadStream(target).pipe(res);
   });
@@ -556,6 +576,34 @@ export function createHandler(options = {}) {
 
     return serveStatic(req, res, root);
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* 静态资源压缩                                                        */
+/* ------------------------------------------------------------------ */
+
+/* MapLibre 一个包 1 MB，不压缩首屏要等 1.5 秒；gzip 后 285 KB。
+   文本类才压，图片/字体本身已压缩，再压只是浪费 CPU */
+const GZIP_EXT = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map']);
+const gzipCache = new Map();
+const GZIP_CACHE_MAX = 40;
+
+function gzipFor(file, mtimeMs) {
+  const key = file + '|' + mtimeMs;
+  const hit = gzipCache.get(key);
+  if (hit) return hit;
+
+  const buf = zlib.gzipSync(fs.readFileSync(file), { level: 6 });
+  /* 简单 LRU：超过上限丢最早的一条，够用且不会无限涨 */
+  if (gzipCache.size >= GZIP_CACHE_MAX) {
+    gzipCache.delete(gzipCache.keys().next().value);
+  }
+  gzipCache.set(key, buf);
+  return buf;
+}
+
+function acceptsGzip(req) {
+  return /\bgzip\b/i.test(req.headers['accept-encoding'] || '');
 }
 
 /** 读取 .env（不引第三方库，简单够用） */
