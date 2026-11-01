@@ -122,6 +122,22 @@
       <div class="badge" id="badgePois"><div class="n" id="bPois">0</div><div class="l">Places</div></div>
       <div class="badge" id="badgeBudget"><div class="n" id="bBudget">¥0</div><div class="l">Budget</div></div>
     </div>
+
+    <!-- 多方案对比：生成第二个方案后才出现 -->
+    <div class="variant-bar" id="variantBar" style="display:none">
+      <span class="variant-label">方案</span>
+      <div class="variant-chips" id="variantChips"></div>
+      <button class="variant-add" id="variantAdd" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        换个风格
+      </button>
+    </div>
+    <div class="variant-styles" id="variantStyles">
+      <button type="button" data-style="budget">穷游 少花钱</button>
+      <button type="button" data-style="comfort">舒适 慢节奏</button>
+      <button type="button" data-style="family">带娃 亲子</button>
+      <button type="button" data-style="culture">文艺 看展逛馆</button>
+    </div>
   </header>
 
   <!-- ================= 控制条 ================= -->

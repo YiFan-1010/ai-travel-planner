@@ -103,6 +103,34 @@ export const PLAN_SYSTEM_WITH_COORDS = [
   '7) 优先满足用户兴趣、必去/必吃与同行人特点；「不想要」的项目一律不排。',
 ].join('\n');
 
+/** 可对比的方案风格。key 与 UI 上的按钮一一对应 */
+export const STYLE_HINTS: Record<string, { label: string; hint: string }> = {
+  budget: {
+    label: '穷游',
+    hint:
+      '【风格：穷游】预算优先。多安排免费景点、公园、老街、大学校园；' +
+      '餐厅选本地平价小馆（人均 30 元内）；交通以步行和公交为主，不安排高消费项目。',
+  },
+  comfort: {
+    label: '舒适',
+    hint:
+      '【风格：舒适】体验优先。每天地点精简到 3-4 个，留足休息时间；' +
+      '餐厅选口碑好、环境舒适的（人均 80-150）；可安排下午茶、温泉或按摩这类放松项目。',
+  },
+  family: {
+    label: '带娃',
+    hint:
+      '【风格：带娃】亲子优先。每天不超过 3 个地点，节奏慢；' +
+      '优先科技馆、动物园、乐园、水族馆这类有互动的场所；避免长时间步行、爬山和夜间活动。',
+  },
+  culture: {
+    label: '文艺',
+    hint:
+      '【风格：文艺】文化优先。以博物馆、美术馆、老建筑、独立书店、咖啡馆为主；' +
+      '避开人挤人的网红打卡点；节奏舒缓，留时间慢慢逛。',
+  },
+};
+
 function prefsBlock(p: PlanPrefs): string {
   const lines: string[] = [];
   if (p.party) lines.push(`- 同行：${p.party}`);
@@ -118,17 +146,24 @@ function prefsBlock(p: PlanPrefs): string {
 }
 
 /** 首轮：生成行程骨架 */
-export function buildPlanPrompt(req: PlanRequest, needCoords: boolean): string {
+export function buildPlanPrompt(
+  req: PlanRequest,
+  needCoords: boolean,
+  style?: string
+): string {
   const datePart =
     req.startDate && req.endDate ? `（${req.startDate} 至 ${req.endDate}）` : '';
   const tail = needCoords
     ? '请务必给出每个地点的 WGS-84 经纬度。'
     : '记住：只写地点名称，不要写坐标。';
 
+  const styleHint = style && STYLE_HINTS[style] ? STYLE_HINTS[style].hint : '';
+
   return [
     `请为「${req.destination}」规划 ${req.days} 天行程${datePart}。`,
     '',
     prefsBlock(req.prefs),
+    ...(styleHint ? ['', styleHint] : []),
     '',
     tail,
   ].join('\n');

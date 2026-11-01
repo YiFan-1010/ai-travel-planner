@@ -225,6 +225,58 @@ button:active,.btn:active,.tab:active,.chips button:active{transform:scale(.965)
   mask-image:linear-gradient(218deg,#000 14%,rgba(0,0,0,.6) 52%,transparent 88%);
 }
 .banner-top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+/* ---- 多方案对比 ---- */
+.variant-bar{
+  position:relative;z-index:1;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-top:18px;padding-top:15px;border-top:1px dashed var(--line-2);
+}
+.variant-label{font-size:10.5px;font-weight:800;color:var(--ink-3);letter-spacing:.08em}
+.variant-chips{display:flex;gap:7px;flex-wrap:wrap}
+.variant-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 14px;border-radius:var(--r-full);
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);
+  font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;
+  transition:background 180ms var(--e-out),color 180ms var(--e-out),
+             border-color 180ms var(--e-out),transform 180ms var(--e-out);
+}
+.variant-chip:hover{border-color:var(--primary-line);color:var(--primary);transform:translateY(-1px)}
+.variant-chip:active{transform:scale(.97)}
+.variant-chip.on{
+  background:var(--primary);border-color:var(--primary);color:#fff;
+  box-shadow:0 8px 20px -8px rgba(37,99,235,.72);
+}
+.variant-add{
+  display:inline-flex;align-items:center;gap:5px;margin-left:auto;
+  padding:6px 13px;border-radius:var(--r-full);
+  border:1px dashed var(--line-2);background:transparent;color:var(--ink-3);
+  font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;
+  transition:color 180ms var(--e-out),border-color 180ms var(--e-out);
+}
+.variant-add:hover{color:var(--primary);border-color:var(--primary);border-style:solid}
+.variant-add svg{width:13px;height:13px}
+.variant-add:disabled{opacity:.45;cursor:default;color:var(--ink-4);border-color:var(--line)}
+
+.variant-styles{
+  position:relative;z-index:1;display:none;gap:8px;flex-wrap:wrap;
+  margin-top:11px;padding:11px 13px;border-radius:var(--r-md);
+  background:var(--surface);border:1px solid var(--line);
+}
+.variant-styles.on{display:flex;animation:enter-rise 220ms var(--e-out) both}
+.variant-styles button{
+  padding:7px 15px;border-radius:var(--r-full);
+  border:1px solid var(--line-2);background:var(--paper);color:var(--ink);
+  font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;
+  transition:border-color 160ms var(--e-out),color 160ms var(--e-out),transform 160ms var(--e-out);
+}
+.variant-styles button:hover{border-color:var(--primary);color:var(--primary);transform:translateY(-1px)}
+.variant-styles button:disabled{opacity:.4;cursor:default;transform:none}
+
+@media (max-width:760px){
+  .variant-add{margin-left:0}
+  .variant-styles button{flex:1 1 calc(50% - 8px)}
+}
 .banner .eyebrow{
   font-size:11px;letter-spacing:.26em;text-transform:uppercase;font-weight:700;
   color:var(--ink-3);margin:0 0 12px;display:flex;align-items:center;gap:9px;

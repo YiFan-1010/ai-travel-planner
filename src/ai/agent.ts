@@ -41,6 +41,8 @@ import type {
 export interface GenerateOptions {
   request: PlanRequest;
   config: LlmConfig;
+  /** 方案风格：budget / comfort / family / culture，留空为默认 */
+  style?: string;
   onStep?: StepListener;
   signal?: AbortSignal;
 }
@@ -143,7 +145,7 @@ export async function generatePlan(opts: GenerateOptions): Promise<GenerateResul
   const firstMsg = await chat(config, {
     messages: [
       { role: 'system', content: geoReady ? PLAN_SYSTEM : PLAN_SYSTEM_WITH_COORDS },
-      { role: 'user', content: buildPlanPrompt(request, !geoReady) },
+      { role: 'user', content: buildPlanPrompt(request, !geoReady, opts.style) },
     ],
     temperature: 0.8,
     maxTokens: Math.min(6000, 1200 + request.days * 700),

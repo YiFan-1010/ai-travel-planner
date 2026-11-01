@@ -2817,6 +2817,128 @@ async function callAgent(place, start, end, n, prefs, intro) {
   }
 }
 
+/* =========================================================================
+   多方案对比：同一目的地生成不同节奏的行程，横向切换比较
+   ========================================================================= */
+var VARIANT_LABELS = { budget: '穷游', comfort: '舒适', family: '带娃', culture: '文艺' };
+
+function ensureVariants() {
+  if (!Array.isArray(state.variants)) state.variants = [];
+  if (typeof state.activeVariant !== 'number') state.activeVariant = 0;
+}
+
+function resetVariants(label, plan) {
+  state.variants = [{ label: label || '默认', plan: plan }];
+  state.activeVariant = 0;
+  renderVariantBar();
+}
+
+function addVariant(label, plan) {
+  ensureVariants();
+  state.variants.push({ label: label, plan: plan });
+  state.activeVariant = state.variants.length - 1;
+  renderVariantBar();
+}
+
+function renderVariantBar() {
+  ensureVariants();
+  var bar = $('variantBar');
+  var chips = $('variantChips');
+  if (!bar || !chips) return;
+
+  /* 只有一个方案时不显示这一行，免得占地方 */
+  if (state.variants.length < 2) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  chips.innerHTML = state.variants.map(function (v, i) {
+    return '<button class="variant-chip' + (i === state.activeVariant ? ' on' : '') +
+      '" data-i="' + i + '" type="button">' + escapeHtml(v.label) + '</button>';
+  }).join('');
+}
+
+async function switchVariant(i) {
+  ensureVariants();
+  if (i === state.activeVariant || !state.variants[i]) return;
+
+  /* 切走之前把当前编辑结果存回原方案，拖拽排序和 AI 调整才不会丢 */
+  if (state.plan) state.variants[state.activeVariant].plan = state.plan;
+
+  state.activeVariant = i;
+  renderVariantBar();
+  await loadPlan(state.variants[i].plan);
+  toast('已切换到「' + state.variants[i].label + '」');
+}
+
+async function generateVariant(style) {
+  var label = VARIANT_LABELS[style] || '备选';
+  var place = $('place').value.trim();
+  var start = $('start').value;
+  var end = $('end').value;
+
+  if (!place) { toast('请先填写目的地', true); return; }
+
+  var s = state.settings;
+  if (!s.apiKey) { openSettings(); toast('请先配置 API Key', true); return; }
+  if (!window.__AI__ || typeof window.__AI__.generatePlan !== 'function') {
+    toast('AI 模块未就绪', true);
+    return;
+  }
+
+  var n = (start && end) ? daysBetween(start, end) : 3;
+  if (n > 10) n = 10;
+  var prefs = readPrefs();
+
+  var btn = $('variantAdd');
+  if (btn) btn.disabled = true;
+
+  startLoading('正在生成「' + label + '」方案');
+  var det = $('ovDetail');
+  if (det) det.textContent = '同一目的地 换一种节奏';
+
+  try {
+    if (window.__AI__.tools && window.__AI__.tools.setGeoConfig) {
+      window.__AI__.tools.setGeoConfig({ amapKey: (s.amapKey || '').trim() });
+    }
+
+    var res = await window.__AI__.generatePlan({
+      request: {
+        destination: place,
+        days: n,
+        startDate: start || undefined,
+        endDate: end || undefined,
+        prefs: prefs
+      },
+      config: { baseUrl: s.apiBase, apiKey: s.apiKey, model: s.model },
+      style: style,
+      onStep: function (step) {
+        var t = $('ovTxt');
+        if (t && step.message) t.textContent = step.message;
+        var d = $('ovDetail');
+        if (d && step.detail) d.textContent = step.detail;
+        if (typeof step.progress === 'number') setOvBar(step.progress);
+      }
+    });
+
+    stopLoading();
+    state.aiStats = res.stats || null;
+    state.aiIssues = res.issues || [];
+
+    addVariant(label, res.plan);
+    await loadPlan(res.plan);
+    toast('「' + label + '」方案已生成');
+  } catch (e) {
+    stopLoading();
+    console.error('[variant]', e);
+    toast('生成失败 ' + (e && e.message ? e.message : ''), true);
+  } finally {
+    if (btn) btn.disabled = false;
+    var styles = $('variantStyles');
+    if (styles) styles.classList.remove('on');
+  }
+}
+
 async function generatePlan() {
   var place = $('place').value.trim();
   var start = $('start').value, end = $('end').value;
@@ -2874,6 +2996,7 @@ async function generatePlan() {
     if (state.settings.refine) await refineCoords(plan);
 
     await loadPlan(plan);
+    resetVariants('默认', plan);
     stopLoading();
 
     if (intro) {
@@ -4923,6 +5046,30 @@ function init() {
   });
 
   $('genBtn').onclick = generatePlan;
+
+  var vAdd = $('variantAdd');
+  if (vAdd) {
+    vAdd.onclick = function () {
+      var el = $('variantStyles');
+      if (el) el.classList.toggle('on');
+    };
+  }
+  var vStyles = $('variantStyles');
+  if (vStyles) {
+    vStyles.onclick = function (e) {
+      var b = e.target.closest('button[data-style]');
+      if (!b || b.disabled) return;
+      generateVariant(b.getAttribute('data-style'));
+    };
+  }
+  var vChips = $('variantChips');
+  if (vChips) {
+    vChips.onclick = function (e) {
+      var b = e.target.closest('.variant-chip');
+      if (!b) return;
+      switchVariant(Number(b.getAttribute('data-i')));
+    };
+  }
   $('demoBtn').onclick = loadSample;
 
   $('styleSwitch').addEventListener('click', function (e) {
