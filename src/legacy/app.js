@@ -39,7 +39,7 @@ var DEFAULT_SETTINGS = {
   pitch3d: false,
   theme: 'light',
   labels: true,
-  satMode: 'macro'
+  satMode: 'city'
 };
 
 // 总览时每天一种颜色（与分类色区分开）
@@ -368,6 +368,12 @@ function loadSettings() {
       merged.routeMode = 'osrm';
       merged.routeVersion = 2;
     }
+    // 卫星默认档从「宏观」改为「城市级」：直接看到真实屋顶，比一张纹理球更说明问题。
+    // 只升级还停在 macro 的老配置，用户主动选过 city / off 的不动
+    if (!merged.satVersion || merged.satVersion < 1) {
+      if (!merged.satMode || merged.satMode === 'macro') merged.satMode = 'city';
+      merged.satVersion = 1;
+    }
     return merged;
   } catch (e) {
     return Object.assign({}, DEFAULT_SETTINGS);
@@ -508,7 +514,7 @@ function openSettings() {
   $('sIntro').checked = !!state.settings.intro;
   $('sRefine').checked = !!state.settings.refine;
   $('sLabels').checked = state.settings.labels !== false;
-  if ($('sSatMode')) $('sSatMode').value = state.settings.satMode || 'macro';
+  if ($('sSatMode')) $('sSatMode').value = state.settings.satMode || 'city';
 
   var modal = $('settingsModal');
   modal.classList.add('show');
@@ -1421,7 +1427,9 @@ function applySatellite(map) {
       if (map.__bldOnSat !== onSat) {
         map.__bldOnSat = onSat;
         map.setPaintProperty('custom-3d-buildings', 'fill-extrusion-color', onSat ? '#C2C8D4' : '#d9d2c6');
-        map.setPaintProperty('custom-3d-buildings', 'fill-extrusion-opacity', onSat ? 0.72 : 0.88);
+        /* 0.72 时体块几乎盖住屋顶，城市级影像就白看了。
+           压到 0.35：保留立体轮廓，屋顶透得出来 */
+        map.setPaintProperty('custom-3d-buildings', 'fill-extrusion-opacity', onSat ? 0.35 : 0.88);
       }
     }
   } catch (e) {}
@@ -2554,6 +2562,8 @@ function openGlobeView() {
       maxTileCacheSize: 300
     });
     state.globeMap = map;
+    /* 调试句柄，同 __MAP__ */
+    window.__GLOBE_MAP__ = map;
     // 容器尺寸会随主题/布局变化（切换深色会重排整页），
     // 地图不跟着量就会被裁掉一块，交给 ResizeObserver 兜住
     if (window.ResizeObserver) {
@@ -3672,6 +3682,10 @@ function ensureMap(center) {
 
     state.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     state.map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+
+    /* 调试句柄：控制台里可以直接 __MAP__.getZoom() 看状态，
+       自动化验证也靠它操作相机，不影响运行时逻辑 */
+    window.__MAP__ = state.map;
 
     var done = false;
     function ready() {
@@ -5142,6 +5156,10 @@ function init() {
   }
   $('start').value = fmt(today);
   $('end').value = fmt(plus2);
+
+  /* loadSettings 里的版本迁移只改了内存，这里落盘一次，
+     否则下次启动还会拿着旧值重新迁移一遍 */
+  saveSettings();
 
   updateApiHint();
   updateStyleButtons();
