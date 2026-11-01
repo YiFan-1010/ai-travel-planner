@@ -452,6 +452,11 @@ select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3
 .day-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px}
 .day-count{font-size:11px;font-weight:700;color:var(--ink-3);font-variant-numeric:tabular-nums;
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r-full);padding:4px 10px;white-space:nowrap}
+/* 当日真实里程与耗时，数据来自 OSRM */
+.day-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.day-route{font-size:11px;font-weight:700;color:var(--primary);font-variant-numeric:tabular-nums;
+  background:var(--primary-soft);border-radius:var(--r-full);padding:4px 10px;white-space:nowrap}
+.day-route:empty{display:none}
 
 /* =========================================================================
    时间轴卡片

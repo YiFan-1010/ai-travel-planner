@@ -3145,6 +3145,7 @@ async function renderDay(animate) {
   morphText($('dayTheme'), tidyText(d.theme));
   var cnt = $('dayCount');
   if (cnt) cnt.textContent = pois.length + ' 个点位';
+  setDayRouteInfo(0);
 
   tl.innerHTML = '';
 
@@ -3313,6 +3314,7 @@ async function renderOverview(animate) {
   morphText($('dayTheme'), state.plan.days.length + ' 天 ' + total + ' 个点位 按天分色');
   var cnt = $('dayCount');
   if (cnt) cnt.textContent = total + ' 个点位';
+  setDayRouteInfo(0);
 
   tl.innerHTML = '';
 
@@ -3452,8 +3454,12 @@ async function updateMapOverview() {
   var feats = [];
   var failed = 0;
   var farCount = 0;
+  var totalDist = 0;
+  var totalDur = 0;
   results.forEach(function (r, i) {
     if (r && r.geo && r.geo.geometry) {
+      totalDist += (r.geo.properties && r.geo.properties.distance) || 0;
+      totalDur += (r.geo.properties && r.geo.properties.duration) || 0;
       (r.geo._snap || []).forEach(function (sp) { if (sp && sp.dist > 150) farCount++; });
       feats.push({
         type: 'Feature',
@@ -3480,10 +3486,11 @@ async function updateMapOverview() {
   if (feats.length) {
     setRouteData({ type: 'FeatureCollection', features: feats });
     var notes = ['全部 ' + days.length + ' 天'];
-    if (!failed) notes.push(profileLabel + ' 真实路线');
+    if (!failed) notes.push('真实路线');
     if (failed) notes.push(failed + ' 天路网未取到 已用直线代替');
     if (farCount) notes.push(farCount + ' 个地点离路较远 已用虚线接驳');
     setRouteStatus(notes.join(' · '), failed ? 'warn' : 'ok');
+    setDayRouteInfo(totalDist, totalDur, 'total');
   }
 }
 
@@ -3809,6 +3816,39 @@ function dropPins() {
   setTimeout(syncPinLabels, 320);
 }
 
+/* 当日真实里程：OSRM 的 distance/duration，没取到就留空 */
+function fmtDistance(m) {
+  return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1) + ' km';
+}
+function fmtDuration(sec) {
+  var min = Math.round(sec / 60);
+  return min < 60 ? min + ' 分钟' : (min / 60).toFixed(1) + ' 小时';
+}
+function setDayRouteInfo(dist, dur, profile) {
+  var el = $('dayRoute');
+  if (!el) return;
+  if (!dist || dist <= 0) { el.textContent = ''; return; }
+
+  /* 全部视图是三天加起来，报一个步行时长会被误读成一天 */
+  if (profile === 'total') {
+    el.textContent = fmtDistance(dist) + ' · 全程合计';
+    return;
+  }
+
+  /* OSRM 公共服务的 foot/bike 其实都按 car 引擎算，
+     三种 profile 返回的 duration 完全一样（实测 3967m / 301s）。
+     距离可信，时长对步行没有参考意义，按 4.5km/h 自己估。 */
+  var seconds;
+  if (profile === 'driving') {
+    seconds = dur || Math.round((dist / 1000 / 30) * 3600);
+  } else {
+    seconds = Math.round((dist / 1000 / 4.5) * 3600);
+  }
+
+  el.textContent = fmtDistance(dist) + ' · ' +
+    (profile === 'driving' ? '驾车 ' : '步行约 ') + fmtDuration(seconds);
+}
+
 function setRouteStatus(text, cls) {
   var el = $('routeStatus');
   if (!el) return;
@@ -3975,8 +4015,12 @@ async function updateMapForDay(d) {
   if (state.settings.routeMode === 'osrm' && coords.length > 1) {
     if (state.routeCache[dayKey]) {
       var cached = state.routeCache[dayKey];
-      cached.properties = { color: dayColor, links: buildLinks(coords, cached._snap) };
-      setRouteStatus(profileLabel + ' 真实路线', 'ok');
+      cached.properties = Object.assign({}, cached.properties || {}, {
+        color: dayColor,
+        links: buildLinks(coords, cached._snap)
+      });
+      setRouteStatus('真实路线', 'ok');
+      setDayRouteInfo(cached.properties.distance, cached.properties.duration, profile);
       animateRoute(cached);
       return;
     }
@@ -3986,10 +4030,14 @@ async function updateMapForDay(d) {
       var geo = await fetchOsrm(coords, profile);
       if (token !== state.dayToken) return;
       state.routeCache[dayKey] = geo;
-      geo.properties = { color: dayColor, links: buildLinks(coords, geo._snap) };
+      geo.properties = Object.assign({}, geo.properties || {}, {
+        color: dayColor,
+        links: buildLinks(coords, geo._snap)
+      });
+      setDayRouteInfo(geo.properties.distance, geo.properties.duration, profile);
       var far = maxSnap(geo._snap);
       setRouteStatus(
-        profileLabel + ' 真实路线' +
+        '真实路线' +
         (far > 800 ? ' · 坐标可能不准' : (far > 150 ? ' · 部分地点离路较远' : '')),
         far > 800 ? 'warn' : 'ok'
       );
@@ -4030,7 +4078,16 @@ async function fetchOsrm(coords, profile) {
       dist: Math.round((w && w.distance) || 0)
     };
   });
-  return { type: 'Feature', properties: {}, geometry: d.routes[0].geometry, _snap: snaps };
+  var route0 = d.routes[0];
+  return {
+    type: 'Feature',
+    properties: {
+      distance: Math.round(route0.distance || 0),
+      duration: Math.round(route0.duration || 0)
+    },
+    geometry: route0.geometry,
+    _snap: snaps
+  };
 }
 
 function maxSnap(snaps) {
