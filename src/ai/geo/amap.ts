@@ -39,6 +39,16 @@ function nameScore(candidateName: string, query: string): number {
   if (a.startsWith(b) || b.startsWith(a)) return 72;
   if (a.includes(b)) return 60;
   if (b.includes(a) && a.length >= 2) return 40;
+  /* 字符覆盖率：「西溪湿地」要能命中「西溪国家湿地公园」这类中间插字的官方全称。
+     限定查询词至少 3 个字，避免「西湖」误命中「西湖区」。 */
+  const qChars = new Set(b);
+  if (qChars.size >= 3) {
+    let covered = 0;
+    qChars.forEach((ch) => {
+      if (a.includes(ch)) covered += 1;
+    });
+    if (covered / qChars.size >= 0.8) return 30;
+  }
   return 0;
 }
 
@@ -90,7 +100,14 @@ export async function amapSearch(
   }
 
   if (data.status !== '1') {
-    throw new Error(`高德返回 ${data.infocode ?? ''} ${data.info ?? '未知错误'}`);
+    const code = data.infocode ?? '';
+    /* 10020/10021/10019 都是并发或频率超限，等一会重试即可 */
+    const rateLimited = ['10019', '10020', '10021', '10003', '10004'].includes(code);
+    const err = new Error(
+      `${rateLimited ? 'RATE_LIMIT' : 'AMAP_ERROR'} ${code} ${data.info ?? ''}`.trim()
+    );
+    (err as Error & { rateLimited?: boolean }).rateLimited = rateLimited;
+    throw err;
   }
 
   const pois = Array.isArray(data.pois) ? data.pois : [];

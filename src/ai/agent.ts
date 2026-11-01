@@ -95,7 +95,7 @@ async function locate(
         progress: 32 + Math.round((done / Math.max(1, total)) * 40),
       });
     },
-    3
+    2
   );
 
   const missed = Array.from(new Set(names.filter((n) => !hits.has(n))));

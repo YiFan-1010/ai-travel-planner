@@ -174,6 +174,14 @@ function nameScore(candidateName: string, query: string): number {
   if (a.startsWith(b) || b.startsWith(a)) return 72;
   if (a.includes(b)) return 60;
   if (b.includes(a) && a.length >= 2) return 40;
+  const qChars = new Set(b);
+  if (qChars.size >= 3) {
+    let covered = 0;
+    qChars.forEach((ch) => {
+      if (a.includes(ch)) covered += 1;
+    });
+    if (covered / qChars.size >= 0.8) return 30;
+  }
   if (a.slice(0, 2) === b.slice(0, 2) && b.length >= 3) return 18;
   return 0;
 }
@@ -247,20 +255,15 @@ export async function searchPlace(
   const cached = readCache(cacheKey);
   if (cached) return cached;
 
-  /* ① 高德 */
+  /* ① 高德：配了它就是主源，失败直接抛，
+        让批量层做退避重试。不退到 Photon —— 那条路在国内必然干等 9 秒 */
   if (useAmap && geoConfig.amapKey) {
-    try {
-      const list = await amapSearch(query, city, limit, geoConfig.amapKey);
-      if (list.length > 0) {
-        writeCache(cacheKey, list);
-        return list;
-      }
-    } catch {
-      /* 配额或网络问题，落下一个通道 */
-    }
+    const list = await amapSearch(query, city, limit, geoConfig.amapKey);
+    if (list.length > 0) writeCache(cacheKey, list);
+    return list;
   }
 
-  /* ② Photon（熔断后跳过） */
+  /* ② Photon：仅在没配高德时作为免费兜底（熔断后跳过） */
   if (!geoConfig.disablePhoton && photonFailStreak < PHOTON_BREAK_AFTER) {
     try {
       const list = await photonSearch(query, city, limit);
@@ -291,7 +294,7 @@ export async function geocodeAll(
   names: string[],
   city: string,
   onEach?: (name: string, hit: PlaceCandidate | null) => void,
-  concurrency = 3
+  concurrency = 2
 ): Promise<Map<string, PlaceCandidate>> {
   const result = new Map<string, PlaceCandidate>();
   const queue = Array.from(new Set(names.filter(Boolean)));
@@ -302,19 +305,23 @@ export async function geocodeAll(
       const name = queue[cursor++];
       let hit: PlaceCandidate | null = null;
 
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      /* 高德个人 Key 默认 QPS 3，并发超过就会被限流。
+         3 次退避重试足够吃掉偶发超限 */
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           const list = await searchPlace(name, city, 1);
           hit = list[0] ?? null;
           break;
         } catch {
-          if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+          }
         }
       }
 
       if (hit) result.set(name, hit);
       onEach?.(name, hit);
-      await new Promise((r) => setTimeout(r, 80));
+      await new Promise((r) => setTimeout(r, 320));
     }
   };
 
