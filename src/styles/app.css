@@ -332,6 +332,35 @@ button:active,.btn:active,.tab:active,.chips button:active{transform:scale(.965)
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
 .field{display:flex;flex-direction:column;gap:7px;position:relative}
 .field label{font-size:11px;color:var(--ink-3);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+/* ---- 语音输入 ---- */
+.input-wrap{position:relative;display:flex;align-items:center}
+.input-wrap input{padding-right:40px}
+.voice-btn{
+  position:absolute;right:5px;width:30px;height:30px;flex:0 0 30px;
+  display:none;align-items:center;justify-content:center;
+  border:none;border-radius:50%;background:transparent;color:var(--ink-3);
+  cursor:pointer;font-family:inherit;
+  transition:color 180ms var(--e-out),background 180ms var(--e-out),transform 180ms var(--e-out);
+}
+.voice-btn.on{display:flex}
+.voice-btn svg{width:15px;height:15px}
+.voice-btn:hover{color:var(--primary);background:var(--surface)}
+.voice-btn:active{transform:scale(.92)}
+.voice-btn:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+/* 录音中：红色 + 向外扩散的波纹，不用看文字也知道在听 */
+.voice-btn.rec{color:var(--danger);background:transparent}
+.voice-btn.rec::after{
+  content:'';position:absolute;inset:0;border-radius:50%;
+  border:2px solid var(--danger);animation:voicePulse 1.3s var(--e-out) infinite;
+}
+@keyframes voicePulse{
+  0%{transform:scale(1);opacity:.7}
+  100%{transform:scale(1.75);opacity:0}
+}
+@media (prefers-reduced-motion:reduce){
+  .voice-btn.rec::after{animation:none;opacity:.5}
+}
+
 .field input,.field select{
   height:44px;border:1px solid var(--line-2);border-radius:var(--r-sm);padding:0 14px;
   font-size:14px;font-weight:600;color:var(--ink);background:var(--surface);

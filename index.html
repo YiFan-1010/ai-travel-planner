@@ -145,7 +145,12 @@
     <div class="row">
       <div class="field">
         <label>目的地</label>
-        <input id="place" type="text" placeholder="成都 西安 杭州" value="成都" />
+        <div class="input-wrap">
+          <input id="place" type="text" placeholder="成都 西安 杭州" value="成都" />
+          <button class="voice-btn" id="voiceBtn" type="button" aria-label="语音输入目的地" title="说一句 比如 杭州三天">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+          </button>
+        </div>
       </div>
       <div class="field">
         <label>出发日期</label>

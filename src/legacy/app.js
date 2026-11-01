@@ -5146,6 +5146,129 @@ function loadSample() {
 /* =========================================================================
    事件绑定与初始化
    ========================================================================= */
+/* =========================================================================
+   语音输入
+   走路时说不方便打字。用浏览器原生 Web Speech API，
+   不依赖任何服务端、不消耗 Token、不需要额外的 Key。
+   ========================================================================= */
+var VOICE_CN_NUM = {
+  '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5,
+  '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
+};
+
+/* 「我想去杭州玩三天」→ { place: '杭州', days: 3 } */
+function parseVoiceIntent(text) {
+  var raw = String(text || '').replace(/\s+/g, '');
+  if (!raw) return null;
+
+  var days = 0;
+  var dm = raw.match(/(\d{1,2}|[一二两三四五六七八九十])\s*(?:天|日)/);
+  if (dm) {
+    days = /^\d+$/.test(dm[1]) ? Number(dm[1]) : (VOICE_CN_NUM[dm[1]] || 0);
+  }
+
+  var place = raw
+    .replace(/^(?:我想去|我要去|我想|帮我|给我|请|规划|安排|计划|来一个|来个|一下|去)+/, '')
+    .replace(/(\d{1,2}|[一二两三四五六七八九十])\s*(?:天|日).*$/, '')
+    .replace(/(?:的|行程|攻略|自由行|旅游|旅行|玩|一下)$/, '')
+    .replace(/[，,。.、；;：:！!？?"'']/g, '')
+    .trim();
+
+  if (!place) return null;
+  return { place: place.slice(0, 20), days: days };
+}
+
+function initVoiceInput() {
+  var btn = $('voiceBtn');
+  if (!btn) return;
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  /* 浏览器不支持就完全隐藏，不留一个点了没反应的按钮 */
+  if (!SR) return;
+
+  btn.classList.add('on');
+
+  var rec = new SR();
+  rec.lang = 'zh-CN';
+  rec.interimResults = true;
+  rec.continuous = false;
+  rec.maxAlternatives = 1;
+
+  var listening = false;
+  var finalText = '';
+
+  function resetBtn() {
+    listening = false;
+    btn.classList.remove('rec');
+    btn.setAttribute('aria-label', '语音输入目的地');
+  }
+
+  rec.onstart = function () {
+    listening = true;
+    finalText = '';
+    btn.classList.add('rec');
+    btn.setAttribute('aria-label', '正在聆听 点击结束');
+  };
+
+  rec.onresult = function (e) {
+    var interim = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      var r = e.results[i];
+      if (r.isFinal) finalText += r[0].transcript;
+      else interim += r[0].transcript;
+    }
+    /* 边说边填：用户能立刻看出有没有听对 */
+    var live = (finalText + interim).trim();
+    if (live) $('place').value = live;
+  };
+
+  rec.onerror = function (e) {
+    resetBtn();
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      toast('麦克风被拒绝 可在地址栏右侧重新允许', true);
+    } else if (e.error === 'no-speech') {
+      toast('没听到声音 再说一次');
+    }
+  };
+
+  rec.onend = function () {
+    var spoken = finalText || $('place').value;
+    resetBtn();
+    if (!spoken) return;
+
+    var parsed = parseVoiceIntent(spoken);
+    if (!parsed) return;
+
+    $('place').value = parsed.place;
+
+    /* 说了「三天」就把返程日期一并算好，少填一个框 */
+    if (parsed.days >= 1 && parsed.days <= 10 && $('start').value) {
+      var begin = new Date($('start').value + 'T00:00:00');
+      if (!isNaN(begin.getTime())) {
+        var endDate = new Date(begin.getTime() + (parsed.days - 1) * 86400000);
+        var mm = String(endDate.getMonth() + 1).padStart(2, '0');
+        var dd = String(endDate.getDate()).padStart(2, '0');
+        $('end').value = endDate.getFullYear() + '-' + mm + '-' + dd;
+      }
+      toast('已识别「' + parsed.place + ' ' + parsed.days + ' 天」');
+    } else {
+      toast('已识别「' + parsed.place + '」');
+    }
+  };
+
+  btn.onclick = function () {
+    if (listening) {
+      try { rec.stop(); } catch (e) {}
+      return;
+    }
+    try {
+      rec.start();
+    } catch (e) {
+      /* 上一次还没释放时重复 start 会抛错，忽略即可 */
+    }
+  };
+}
+
 function init() {
   var today = new Date();
   var plus2 = new Date(Date.now() + 2 * 86400000);
@@ -5286,6 +5409,7 @@ function init() {
   });
 
   $('genBtn').onclick = generatePlan;
+  initVoiceInput();
 
   var vAdd = $('variantAdd');
   if (vAdd) {
