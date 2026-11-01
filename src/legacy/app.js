@@ -3089,6 +3089,12 @@ async function loadPlan(plan) {
   state.routeCache = {};
   savePlanCache(plan);
 
+  /* 目的地跟着当前行程走：恢复缓存、切换方案、重新生成后都对得上，
+     否则会出现「展示西安行程、输入框还写着成都」 */
+  var city = (plan && plan.city) ? String(plan.city).trim() : '';
+  var placeEl = $('place');
+  if (city && placeEl && placeEl.value.trim() !== city) placeEl.value = city;
+
   var emptyEl = $('empty');
   if (emptyEl && emptyEl.style.display !== 'none') {
     exitThen(emptyEl, 200, function () { emptyEl.style.display = 'none'; });
@@ -5148,7 +5154,11 @@ function init() {
       if (state.plan) return;
       loadSample();
       setTimeout(function () {
-        if (state.plan && llmReady()) toast('这是示例 改掉目的地就能生成你的');
+        /* 已经在生成、或已经生成过真行程时，别再弹这句 */
+        var ov = $('overlay');
+        if (ov && ov.classList.contains('show')) return;
+        if (!state.plan || state.aiStats || !llmReady()) return;
+        toast('这是示例 改掉目的地就能生成你的');
       }, 1400);
     }, state.settings.intro ? 2400 : 900);
   }
