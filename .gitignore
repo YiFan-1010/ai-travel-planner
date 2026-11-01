@@ -29,3 +29,6 @@ desktop.ini
 # 旧版本备份
 *.bak
 *.old
+
+# 应用发布标记文件（工具生成，不入库）
+.wbapp_*.genie
