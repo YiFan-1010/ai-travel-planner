@@ -248,6 +248,27 @@ async function photonSearch(
  * @param city 所属城市，用来消歧
  * @param limit 返回候选数，默认 3
  */
+/**
+ * 地名的降级查询序列。
+ *
+ * 模型生成的名字常带修饰成分，高德偏偏认不出：
+ *   松鹤楼（山塘街店）  → 0 条
+ *   松鹤楼              → 命中
+ * 全角括号、分店名、景区后缀都属于这类。原名查不到时逐级剥掉再试，
+ * 命中率能显著提升，也少一次「发现问题 → 重新生成」的往返。
+ */
+function queryVariants(name: string): string[] {
+  const out = [name];
+
+  const noParen = name.replace(/[（(【\[][^）)】\]]*[）)】\]]/g, '').trim();
+  if (noParen && noParen !== name) out.push(noParen);
+
+  const stripped = noParen.replace(/(风景名胜区|风景区|旅游景区|景区|步行街|商业街|美食街)$/, '').trim();
+  if (stripped.length >= 2 && stripped !== noParen) out.push(stripped);
+
+  return Array.from(new Set(out)).slice(0, 3);
+}
+
 export async function searchPlace(
   name: string,
   city = '',
@@ -266,9 +287,14 @@ export async function searchPlace(
   /* ① 高德：配了它就是主源，失败直接抛，
         让批量层做退避重试。不退到 Photon —— 那条路在国内必然干等 9 秒 */
   if (useAmap) {
-    const list = await amapSearch(query, city, limit, geoConfig.amapKey || '');
-    if (list.length > 0) writeCache(cacheKey, list);
-    return list;
+    for (const variant of queryVariants(query)) {
+      const list = await amapSearch(variant, city, limit, geoConfig.amapKey || '');
+      if (list.length > 0) {
+        writeCache(cacheKey, list);
+        return list;
+      }
+    }
+    return [];
   }
 
   /* ② Photon：仅在没配高德时作为免费兜底（熔断后跳过） */

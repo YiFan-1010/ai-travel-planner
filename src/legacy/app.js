@@ -418,7 +418,13 @@ function renderKnowledge(hits) {
   box.style.display = 'block';
   box.classList.remove('open');
   if (toggle) toggle.setAttribute('aria-expanded', 'false');
-  if (cnt) cnt.textContent = '参考了 ' + hits.length + ' 条本地知识';
+  /* 语料只收录热门城市，其他目的地召回的是跨城市通用建议，
+     两者直接都叫「本地知识」会名不副实 */
+  var localN = 0;
+  for (var i = 0; i < hits.length; i++) {
+    if (hits[i] && hits[i].doc && hits[i].doc.city && hits[i].doc.city !== '*') localN++;
+  }
+  if (cnt) cnt.textContent = '参考了 ' + hits.length + ' 条' + (localN >= 2 ? '本地知识' : '通用常识');
 
   list.innerHTML = hits.map(function (h) {
     var label = RAG_TAG_LABEL[h.doc.tag] || '知识';
@@ -2773,7 +2779,13 @@ function createIntro(landing) {
     fadeOut(quick ? 320 : 720).then(destroy);
   }
 
-  $('skipIntro').onclick = function () { closeNow(true); };
+  $('skipIntro').onclick = function () {
+    /* 用户明确跳过，说明不想看动画了。
+       不打这个标记的话，之后每次生成还会再播一遍开场，
+       按钮要跟着多转三四秒，看起来像卡住 */
+    state.introPlayed = true;
+    closeNow(true);
+  };
   $('introStart').onclick = function () { closeNow(true); };
 
   // 开场用与「世界模型」同一个地图引擎，视觉与交互完全一致
@@ -2853,6 +2865,7 @@ function createIntro(landing) {
         }
         flightResolve = fin;
         $('skipIntro').onclick = function () {
+          state.introPlayed = true;
           try { map.stop(); } catch (e) {}
           closeNow(true);
         };
@@ -3191,6 +3204,11 @@ async function generatePlan() {
     renderKnowledge(state.aiKnowledge);
     resetVariants('默认', plan);
     stopLoading();
+
+    /* 行程已经落地了，按钮就该恢复。
+       之前放在 finally 里，一旦播开场飞行动画，按钮要跟着多转三四秒 */
+    genBtn.disabled = false;
+    genBtn.classList.remove('loading');
 
     if (intro) {
       await intro.flyTo(plan);
@@ -5372,18 +5390,22 @@ function init() {
   // 首次打开先展示地球开场（不依赖 API Key）
   var introSeen = false;
   try { introSeen = sessionStorage.getItem('travel_intro_seen') === '1'; } catch (e) {}
+  /* 同一次会话已经看过开场，生成时就别再播一遍——
+     刷新后每次生成都重播一遍地球，会很烦 */
+  if (introSeen) state.introPlayed = true;
   if (state.settings.intro && supportsWebGL() && !introSeen) {
     try {
       state.landingIntro = createIntro(true);
       try { sessionStorage.setItem('travel_intro_seen', '1'); } catch (e) {}
 
-      /* 没人操作就自己进去：开场是门面，但不该成为进入的门槛 */
+      /* 没人操作就自己进去：开场是门面，但不该成为进入的门槛。
+         9 秒太长——评委打开链接等十秒才看到主界面，第一印象就输了 */
       setTimeout(function () {
         var el = $('intro');
         if (!el || el.classList.contains('hidden')) return;
         var sk = $('skipIntro');
         if (sk) sk.click();
-      }, 9000);
+      }, 5200);
     } catch (e) {}
   }
 

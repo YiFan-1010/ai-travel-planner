@@ -238,17 +238,26 @@ button:active,.btn:active,.tab:active,.chips button:active{transform:scale(.965)
 .rag-toggle svg{width:13px;height:13px}
 .rag-toggle .rag-chev{transition:transform 220ms var(--e-out)}
 .rag-note.open .rag-chev{transform:rotate(180deg)}
-.rag-list{
-  list-style:none;margin:0;padding:0;
+/* 折叠必须由单独的包裹层控制：
+   grid-template-rows:0fr 只作用于第一行，列表有 N 条就会生成 N 个隐式行，
+   每行按 auto 撑开，收起状态照样占几十上百像素 */
+.rag-list-wrap{
   display:grid;grid-template-rows:0fr;overflow:hidden;
   transition:grid-template-rows 260ms var(--e-out),margin 260ms var(--e-out);
 }
-.rag-note.open .rag-list{grid-template-rows:1fr;margin-top:9px}
+.rag-note.open .rag-list-wrap{grid-template-rows:1fr;margin-top:9px}
+.rag-list{
+  list-style:none;margin:0;padding:0;
+  /* 0fr 轨道的下限是子元素的 min-content，压到 0 必须显式清掉 */
+  min-height:0;overflow:hidden;
+}
 .rag-list li{
   overflow:hidden;
   font-size:12px;line-height:1.65;color:var(--ink-2);
   padding:7px 0;border-bottom:1px dashed var(--line);
 }
+/* 收起时内边距不该从下沿露出来 */
+.rag-note:not(.open) .rag-list li{padding-top:0;padding-bottom:0}
 .rag-list li:last-child{border-bottom:none}
 .rag-tag{
   display:inline-block;margin-right:7px;padding:1px 7px;border-radius:var(--r-full);
@@ -879,9 +888,11 @@ select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3
 .intro.hidden{display:none}
 .intro.fade-out{opacity:0}
 #introMap{position:absolute;inset:0}
+/* 46% + .82 时，地球下沿的白色大陆正好压在标题上，白底白字看不清。
+   加高到 58% 并把中段提到 .9，文字区一定落在深色底上 */
 .intro-scrim{
-  position:absolute;left:0;right:0;bottom:0;height:46%;pointer-events:none;
-  background:linear-gradient(to top,rgba(6,11,22,.98) 0%,rgba(6,11,22,.82) 32%,rgba(6,11,22,.35) 62%,rgba(6,11,22,0) 100%);
+  position:absolute;left:0;right:0;bottom:0;height:58%;pointer-events:none;
+  background:linear-gradient(to top,rgba(6,11,22,.99) 0%,rgba(6,11,22,.94) 26%,rgba(6,11,22,.72) 52%,rgba(6,11,22,.22) 78%,rgba(6,11,22,0) 100%);
 }
 .intro-content{position:absolute;left:0;right:0;bottom:8%;text-align:center;pointer-events:none;padding:0 24px;z-index:1}
 .intro-brand{
@@ -892,9 +903,12 @@ select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3
   font-size:clamp(34px,5vw,52px);font-weight:800;letter-spacing:-.03em;line-height:1.06;
   background:linear-gradient(96deg,#fff 20%,#C9D8FF 90%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
+  /* 渐变字不能直接用 text-shadow（会画在透明字后面整块发黑），
+     用 drop-shadow 跟着字形走，压在亮色大陆上也能读 */
+  filter:drop-shadow(0 3px 18px rgba(4,8,18,.9)) drop-shadow(0 1px 2px rgba(4,8,18,.6));
   animation:enter-rise 900ms var(--e-out) both .45s;
 }
-.intro-status{margin-top:14px;font-size:13.5px;color:#9BADCB;animation:enter-fade 900ms var(--e-out) both .6s}
+.intro-status{margin-top:14px;font-size:13.5px;color:#B6C6E0;text-shadow:0 1px 8px rgba(4,8,18,.8);animation:enter-fade 900ms var(--e-out) both .6s}
 .intro-actions{margin-top:26px;pointer-events:auto;animation:enter-rise 800ms var(--e-out) both .8s}
 .intro-start{
   background:#fff;color:#0B1220;border:none;border-radius:var(--r-full);
@@ -1276,6 +1290,9 @@ select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3
   .ai-dock{right:14px;left:14px;bottom:14px;align-items:stretch}
   .ai-fab{align-self:flex-end}
   .ai-panel{width:100%}
+  /* 浮动按钮固定在下沿，会盖住页面最后一屏的按钮。
+     给 body 补一段底部留白，滚到底时内容能完整露出来 */
+  body{padding-bottom:86px}
 }
 
 /* =========================================================================

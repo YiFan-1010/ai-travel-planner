@@ -159,7 +159,9 @@ export async function generatePlan(opts: GenerateOptions): Promise<GenerateResul
   const knowledge = formatKnowledge(hits);
 
   /* 整个规划过程中都带着这句话：只在开头闪一下会被字数进度立刻盖掉 */
-  const ragNote = hits.length ? `参考 ${hits.length} 条本地知识` : '';
+  const localHits = hits.filter((h) => h.doc.city !== '*').length;
+  const ragLabel = localHits >= 2 ? '本地知识' : '通用常识';
+  const ragNote = hits.length ? `参考 ${hits.length} 条${ragLabel}` : '';
 
   /* ---------------- ② 规划 ---------------- */
   emit({
