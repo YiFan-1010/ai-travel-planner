@@ -272,6 +272,29 @@ async function handleChat(req, res, cfg) {
  * 由前端的 amapSearch 做评分、排序、GCJ-02 → WGS-84 转换，
  * 保证本地直连与走代理走同一套排序逻辑。
  */
+/* ------------------------------------------------------------------ */
+/* 高德 QPS 闸门                                                       */
+/* ------------------------------------------------------------------ */
+
+/*
+ * 高德个人 Key 的 QPS 是 3。批量地理编码并发 2，每个点失败还会重试、
+ * 还会试名称变体，瞬时容易冲到 5-6 个请求 —— 超限后高德返回错误，
+ * 前端就记为「定位失败」，真实存在的地点也会标红。
+ *
+ * 服务端统一串行化上游请求，保证速率不超过 3 次/秒。
+ * 单次多等 340ms，换的是「不再有假的定位失败」。
+ */
+const AMAP_MIN_GAP = 340;
+let amapNextAt = 0;
+
+function amapGate() {
+  const now = Date.now();
+  const at = Math.max(now, amapNextAt);
+  amapNextAt = at + AMAP_MIN_GAP;
+  const wait = at - now;
+  return wait > 0 ? new Promise((r) => setTimeout(r, wait)) : Promise.resolve();
+}
+
 async function handleGeo(req, res, cfg, search) {
   if (req.method !== 'GET') return sendJson(res, 405, { error: 'method not allowed' });
 
@@ -303,6 +326,7 @@ async function handleGeo(req, res, cfg, search) {
   const timer = setTimeout(() => ctrl.abort(), 9000);
 
   try {
+    await amapGate();
     const upstream = await fetch(`${cfg.AMAP_ENDPOINT}?${params}`, { signal: ctrl.signal });
     const text = await upstream.text();
     res.writeHead(upstream.status, {
@@ -411,6 +435,7 @@ async function handleSearch(req, res, cfg, search) {
   const timer = setTimeout(() => ctrl.abort(), 9000);
 
   try {
+    await amapGate();
     const upstream = await fetch(`${cfg.AMAP_ENDPOINT}?${params}`, { signal: ctrl.signal });
     const data = await upstream.json();
 
