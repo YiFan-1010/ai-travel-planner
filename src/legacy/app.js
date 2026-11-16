@@ -3265,9 +3265,22 @@ async function loadPlan(plan) {
   renderDay();
 }
 
+/* 模型偶尔把日期写进标题（「成都三日游（2026-11-16 至 2026-11-18）」），
+   横幅上已经有日期了，重复一遍还把标题挤成两行 */
+function cleanTitle(t) {
+  var D = '\\d{1,2}\\s*[-/.月]\\s*\\d{1,2}\\s*日?';        /* 01-02 / 1月2日 */
+  var YD = '\\d{4}\\s*[-/.年]\\s*' + D;                     /* 2026-01-02 / 2026年1月2日 */
+  /* 区间：第二个日期常省略年份（2026-11-16 至 11-18），年份必须可选 */
+  var range = new RegExp('[（(]\\s*' + YD + '\\s*(?:至|到|~|-)\\s*(?:\\d{4}\\s*[-/.年]\\s*)?' + D + '\\s*[）)]', 'g');
+  var single = new RegExp('[（(]\\s*' + YD + '\\s*[）)]', 'g');
+
+  return String(t || '').replace(range, '').replace(single, '').trim();
+}
+
 function renderBanner() {
   var p = state.plan;
-  morphText($('title'), p.title || '我的行程');
+  var title = cleanTitle(p.title);
+  morphText($('title'), title || (p.city ? p.city + ' ' + p.days.length + ' 日行程' : '我的行程'));
   var totalPois = 0, totalBudget = 0;
   p.days.forEach(function (d) {
     totalPois += d.pois.length;
