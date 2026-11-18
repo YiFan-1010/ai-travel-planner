@@ -622,6 +622,26 @@ select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3
   width:100%;height:min(66vh,620px);border-radius:var(--r-md);overflow:hidden;
   border:1px solid var(--line);background:var(--surface-2);position:relative;isolation:isolate;
 }
+/* 瓦片在海外，冷启动要 2-4 秒。骨架把这层空白填上，
+   免得用户盯着一块灰底以为坏了 */
+.map-skeleton{
+  position:absolute;inset:0;z-index:2;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface-2);
+  font-size:12.5px;font-weight:700;color:var(--ink-3);letter-spacing:.02em;
+  pointer-events:none;
+  transition:opacity 420ms var(--e-out);
+}
+.map-skeleton::before{
+  content:'';width:13px;height:13px;margin-right:9px;border-radius:50%;
+  border:2px solid var(--line-2);border-top-color:var(--primary);
+  animation:mapSk 900ms linear infinite;
+}
+@keyframes mapSk{to{transform:rotate(360deg)}}
+.map-skeleton.gone{opacity:0}
+@media (prefers-reduced-motion:reduce){
+  .map-skeleton::before{animation:none}
+}
 #map::after{
   content:"";position:absolute;left:0;right:0;top:0;height:64px;pointer-events:none;z-index:2;
   background:linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,0));

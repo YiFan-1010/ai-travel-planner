@@ -440,23 +440,16 @@ function updateApiHint() {
   var btn = $('apiHintBtn');
   var sb = $('settingsBtn');
 
-  if (has) {
-    box.className = 'api-hint ok';
-    txt.textContent = '已配置 ' + (state.settings.model || 'deepseek-chat') + '  ' + state.settings.apiBase;
-    btn.textContent = '修改';
+  /* 能正常用的时候不占版面。
+     Key 由谁提供、走不走代理，都是实现细节，访客不需要知道 */
+  if (has || llmReady()) {
+    box.style.display = 'none';
     sb.className = 'settings-btn ok';
     return;
   }
 
-  /* 没有自有 Key，但服务端提供代理时不算问题，只是告知 */
-  if (llmReady()) {
-    box.className = 'api-hint ok';
-    txt.textContent = '使用服务端代理生成 无需填写 API Key';
-    btn.textContent = '用我自己的 Key';
-    sb.className = 'settings-btn ok';
-    return;
-  }
-
+  /* 只有真正用不了时才提示，否则用户点了生成才知道没配 */
+  box.style.display = '';
   box.className = 'api-hint';
   txt.textContent = '尚未配置大模型 API Key 生成前请先完成设置';
   btn.textContent = '去设置';
@@ -2826,6 +2819,14 @@ function createIntro(landing) {
       toGlobe();
       ensureSatellite(map);
     });
+
+    /* 给开场计时用的就绪信号。
+       用第一次 render + 1.2 秒，而不是 idle —— 地球在自转，
+       idle 要等动画停下才触发，实测能拖到 7 秒 */
+    function markEarthReady() { if (el) el.classList.add('earth-ready'); }
+    map.once('render', function () { setTimeout(markEarthReady, 1200); });
+    map.once('idle', markEarthReady);
+    setTimeout(markEarthReady, 3000);
     map.on('style.load', function () { toGlobe(); ensureSatellite(map); });
     bindSatellite(map);
     setTimeout(toGlobe, 800);
@@ -3729,6 +3730,17 @@ async function updateMapOverview() {
 /* =========================================================================
    MapLibre 地图
    ========================================================================= */
+/* 地图骨架：等首帧瓦片到位再撤，最多等 5 秒 */
+var mapSkeletonGone = false;
+function hideMapSkeleton() {
+  if (mapSkeletonGone) return;
+  mapSkeletonGone = true;
+  var sk = $('mapSkeleton');
+  if (!sk) return;
+  sk.classList.add('gone');
+  setTimeout(function () { if (sk.parentNode) sk.parentNode.removeChild(sk); }, 460);
+}
+
 function ensureMap(center) {
   if (state.map) {
     try { state.map.resize(); } catch (e) {}
@@ -3771,6 +3783,9 @@ function ensureMap(center) {
       if (done) return;
       done = true;
       try { state.map.resize(); } catch (e) {}
+      /* 瓦片铺满视野的时刻，比 style.load 更接近"用户觉得画好了" */
+      try { state.map.once('idle', hideMapSkeleton); } catch (e) {}
+      setTimeout(hideMapSkeleton, 5000);
       resolve();
     }
 
@@ -5411,14 +5426,25 @@ function init() {
       state.landingIntro = createIntro(true);
       try { sessionStorage.setItem('travel_intro_seen', '1'); } catch (e) {}
 
-      /* 没人操作就自己进去：开场是门面，但不该成为进入的门槛。
-         9 秒太长——评委打开链接等十秒才看到主界面，第一印象就输了 */
-      setTimeout(function () {
+      /* 计时从「地球首帧渲染出来」开始，而不是从页面加载开始。
+         冷启动时卫星瓦片要 3-5 秒才到，固定倒计时会切成一个空地球。 */
+      var waited = 0;
+      var readyAt = 0;
+      var introTick = setInterval(function () {
+        waited += 400;
         var el = $('intro');
-        if (!el || el.classList.contains('hidden')) return;
-        var sk = $('skipIntro');
-        if (sk) sk.click();
-      }, 5200);
+        if (!el || el.classList.contains('hidden')) { clearInterval(introTick); return; }
+
+        if (!readyAt && el.classList.contains('earth-ready')) readyAt = waited;
+
+        /* 地球成型后展示 6 秒；网络再差也最多等 14 秒 */
+        var done = readyAt ? waited - readyAt >= 5000 : false;
+        if (done || waited >= 14000) {
+          clearInterval(introTick);
+          var sk = $('skipIntro');
+          if (sk) sk.click();
+        }
+      }, 400);
     } catch (e) {}
   }
 
@@ -5494,6 +5520,10 @@ function init() {
 
   $('genBtn').onclick = generatePlan;
   initVoiceInput();
+
+  /* 兜底：离线降级、地图创建失败等路径不会走到 ready()，
+     骨架不能永远挂在那里 */
+  setTimeout(hideMapSkeleton, 12000);
 
   var ragToggleBtn = $('ragToggle');
   if (ragToggleBtn) {
