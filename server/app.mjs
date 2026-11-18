@@ -179,9 +179,10 @@ async function handleChat(req, res, cfg) {
     return sendJson(res, 400, { error: '请求体不是合法 JSON' });
   }
 
-  /* 服务端强制覆盖模型与流式开关，防止前端传奇怪参数 */
+  /* 服务端覆盖模型；流式默认开启，但允许显式关掉——
+     AI 调整行程要整份 JSON，流式反而难拼 */
   payload.model = cfg.DEEPSEEK_MODEL;
-  payload.stream = true;
+  payload.stream = payload.stream !== false;
   delete payload.api_key;
   delete payload.key;
 
@@ -220,6 +221,18 @@ async function handleChat(req, res, cfg) {
       error: `上游返回 ${upstream.status}`,
       detail,
     });
+  }
+
+  /* 非流式：把上游 JSON 原样回传 */
+  if (payload.stream === false) {
+    clearTimeout(timer);
+    const text = await upstream.text();
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    res.end(text);
+    return;
   }
 
   res.writeHead(200, {

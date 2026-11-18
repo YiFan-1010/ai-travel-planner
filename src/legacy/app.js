@@ -4596,13 +4596,20 @@ async function aiAdjust(text) {
   var timer = setTimeout(function () { ctrl.abort(); }, 150000);
   var res, data;
 
+  /* 没自备 Key 时必须走服务端代理，否则 Authorization 是空的 "Bearer "，
+     DeepSeek 直接 401。这里和生成走的是同一套判断 */
+  var ownKey = !!(s.apiKey && s.apiKey.trim());
+  var endpoint = ownKey
+    ? s.apiBase.replace(/\/+$/, '') + '/chat/completions'
+    : '/api/chat';
+  var headers = { 'Content-Type': 'application/json' };
+  if (ownKey) headers['Authorization'] = 'Bearer ' + s.apiKey;
+  body.stream = false;
+
   try {
-    res = await fetch(s.apiBase.replace(/\/+$/, '') + '/chat/completions', {
+    res = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + s.apiKey
-      },
+      headers: headers,
       body: JSON.stringify(body),
       signal: ctrl.signal
     });
