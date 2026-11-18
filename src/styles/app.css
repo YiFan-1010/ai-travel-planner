@@ -700,8 +700,12 @@ select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3
 /* 固定尺寸很重要：内部 .pin-tip 是绝对定位且 white-space:nowrap，
    它的静态位置会被算进父级的 max-content，把 wrap 撑成一块
    600px 级的透明热区 —— 鼠标隔着半个屏幕也会触发 hover，还会挡地图拖拽 */
+/* 不要设 position：MapLibre 的 .maplibregl-marker 是 absolute + transform 定位。
+   写成 relative 会让每个标记退回文档流、按顺序各占 32px，
+   再叠加 transform，偏移随序号累积 —— 第 5 个点会被推出地图外。
+   absolute 本身也能作为 .pin-tip 的包含块，不需要 relative。 */
 .pin-wrap{
-  position:relative;display:flex;align-items:center;justify-content:center;
+  display:flex;align-items:center;justify-content:center;
   width:32px;height:32px;
 }
 .pin-wrap.compact{width:24px;height:24px}

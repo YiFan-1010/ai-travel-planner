@@ -4289,7 +4289,7 @@ async function updateMapForDay(d) {
       var far = maxSnap(geo._snap);
       setRouteStatus(
         '真实路线' +
-        (far > 800 ? ' · 坐标可能不准' : (far > 150 ? ' · 部分地点离路较远' : '')),
+        (far > 800 ? ' · 部分地点离路网较远' : (far > 150 ? ' · 部分地点离路较远' : '')),
         far > 800 ? 'warn' : 'ok'
       );
       animateRoute(geo);
@@ -4310,16 +4310,28 @@ async function fetchOsrm(coords, profile) {
   var path = coords.map(function (c) { return c[0] + ',' + c[1]; }).join(';');
   var url = 'https://router.project-osrm.org/route/v1/' + (profile || 'driving') + '/' + path +
     '?overview=full&geometries=geojson';
-  var ctrl = new AbortController();
-  var timer = setTimeout(function () { ctrl.abort(); }, 8000);
-  var r;
-  try {
-    r = await fetch(url, { signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
+  /* 3.8 秒是单条请求的常态，多天并发时会翻倍；8 秒超时太紧，
+     一次失败就降级成直线，用户看到的是"坐标不准"的错误结论 */
+  async function attempt(ms) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, ms);
+    try {
+      var res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) throw new Error('OSRM ' + res.status);
+      return await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
   }
-  if (!r.ok) throw new Error('OSRM ' + r.status);
-  var d = await r.json();
+
+  var d;
+  try {
+    d = await attempt(14000);
+  } catch (e) {
+    /* 公共服务偶发拥堵，退避 800ms 再试一次，比直接降级划算 */
+    await new Promise(function (r) { setTimeout(r, 800); });
+    d = await attempt(12000);
+  }
   if (!d.routes || !d.routes[0] || !d.routes[0].geometry) throw new Error('no route');
   // waypoints 里带着每个点被吸附到路网后的真实落点，
   // 用来补「点位 → 道路」的接驳虚线
